@@ -1,0 +1,138 @@
+# MC Labor website as four containers on one host (a cloud VM, Azure Container Apps with the same images, or a PC
+# with Docker for a rehearsal). Only the proxy is reachable from outside; the other three talk on a private network.
+#
+#   docker compose --env-file .env.cloud up -d --build          (STAGING or PRODUCTION: backend.env + secrets/)
+#   docker compose --profile demo up -d --build                 (DEMO: synthetic data, no secrets, open access)
+#
+# Nothing here is deployed yet: this file is prepared and reviewed, not run (Docker is not installed on DEV-PC).
+name: mclabor
+
+services:
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_NAME: ${SITE_NAME:-localhost}
+      MCLABOR_GATEWAY_SECRET_FILE: /run/secrets/gateway_secret
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    secrets:
+      - gateway_secret
+    depends_on:
+      auth:
+        condition: service_started
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks: [edge, internal]
+
+  auth:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.7.1
+    restart: unless-stopped
+    command: ["--config=/etc/oauth2-proxy.cfg"]
+    environment:
+      OAUTH2_PROXY_CLIENT_ID: ${OAUTH2_CLIENT_ID}
+      OAUTH2_PROXY_OIDC_ISSUER_URL: ${OAUTH2_ISSUER_URL}
+      OAUTH2_PROXY_REDIRECT_URL: https://${SITE_NAME}/oauth2/callback
+      OAUTH2_PROXY_EMAIL_DOMAINS: ${COMPANY_EMAIL_DOMAIN}
+      OAUTH2_PROXY_CLIENT_SECRET_FILE: /run/secrets/oauth2_client_secret
+      OAUTH2_PROXY_COOKIE_SECRET_FILE: /run/secrets/oauth2_cookie_secret
+    volumes:
+      - ./oauth2-proxy.cfg:/etc/oauth2-proxy.cfg:ro
+    secrets:
+      - oauth2_client_secret
+      - oauth2_cookie_secret
+    networks: [internal, egress]        # egress: it must reach the identity provider (login.microsoftonline.com)
+
+  frontend:
+    build: ../../frontend
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [internal]
+
+  backend:
+    build: ../../backend
+    restart: unless-stopped
+    env_file:
+      - backend.env                      # DATA_SOURCE, server name, access lists, gateway settings - no secrets
+    environment:
+      GATEWAY_TRUSTED_PROXIES: ${PROXY_ADDRESSES:-172.16.0.0/12}   # the Compose networks' range: only the proxy container can reach the backend on them
+    secrets:
+      - jwt_secret
+      - gateway_secret
+      - production_db_password
+      - staging_db_password
+    volumes:
+      - web_auth:/app/data             # web sign-in store (only used in login mode); back it up with the host
+      - ../../docs/schema:/app/docs/schema:ro
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/ready', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 6s
+      start_period: 30s
+      retries: 3
+    networks: [internal, egress]        # egress: the database (cloud VM or Azure SQL) is outside the Compose network
+
+  # ---- DEMO on containers (synthetic data), for rehearsing the images without any real database ----
+  backend-demo:
+    profiles: [demo]
+    build: ../../backend
+    environment:
+      DATA_SOURCE: demo
+      ACCESS_MODE: open
+      LOG_FORMAT: json
+      ACCESS_LOG: "true"
+      MCLABOR_SECRETS_DIR: /nonexistent
+    volumes:
+      - ../../docs/schema:/app/docs/schema:ro
+    ports:
+      - "127.0.0.1:${DEMO_API_PORT:-8000}:8000"
+    networks: [internal]
+  frontend-demo:
+    profiles: [demo]
+    build:
+      context: ../../frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:${DEMO_API_PORT:-8000}
+    ports:
+      - "127.0.0.1:${DEMO_WEB_PORT:-3000}:3000"
+    networks: [internal]
+
+secrets:
+  jwt_secret:
+    file: ./secrets/jwt_secret
+  gateway_secret:
+    file: ./secrets/gateway_secret
+  production_db_password:
+    file: ./secrets/production_db_password
+  staging_db_password:
+    file: ./secrets/staging_db_password
+  oauth2_client_secret:
+    file: ./secrets/oauth2_client_secret
+  oauth2_cookie_secret:
+    file: ./secrets/oauth2_cookie_secret
+
+volumes:
+  caddy_data:
+  caddy_config:
+  web_auth:
+
+networks:
+  edge:                                 # the proxy's published ports
+  egress:                               # outbound internet for the sign-in service and the database connection
+  internal:                             # frontend <-> proxy <-> backend only; the frontend needs no internet at all
+    internal: true

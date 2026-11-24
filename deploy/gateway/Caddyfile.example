@@ -1,0 +1,49 @@
+# TEMPLATE - not in use. Caddy reverse proxy in front of the MC Labor website, with sign-in by oauth2-proxy.
+# Replace mclabor.internal.example with the site's name on the office network / VPN. Caddy obtains or is given
+# the HTTPS certificate; the website behind it only ever speaks plain HTTP on 127.0.0.1.
+
+mclabor.internal.example {
+	# 1. Everyone must be signed in: ask oauth2-proxy (running on 127.0.0.1:4180) on every request.
+	forward_auth 127.0.0.1:4180 {
+		uri /oauth2/auth
+		# the e-mail of the signed-in person is copied from oauth2-proxy's answer into the forwarded request
+		copy_headers X-Auth-Request-Email
+	}
+
+	# oauth2-proxy's own pages (sign-in, callback, sign-out)
+	handle /oauth2/* {
+		reverse_proxy 127.0.0.1:4180 {
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	# 2. The website's API: strip anything a visitor might have sent, add the shared secret, forward to the backend.
+	handle /api/* {
+		request_header -X-Gateway-Secret
+		request_header -Cf-Access-Authenticated-User-Email
+		# X-Auth-Request-Email was just set by forward_auth (copy_headers) and overwrites any visitor value
+		request_header X-Gateway-Secret "{env.MCLABOR_GATEWAY_SECRET}"
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	# 3. Everything else is the frontend (`npx next start -p 3000 -H 127.0.0.1`).
+	handle {
+		request_header -X-Gateway-Secret
+		request_header -X-Auth-Request-Email
+		request_header -Cf-Access-Authenticated-User-Email
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	# Only office addresses / the VPN range may reach the proxy at all (adjust to the real ranges).
+	@outside not remote_ip 192.0.2.0/24 100.64.0.0/10   # 192.0.2.0/24 = put the office LAN here
+	respond @outside 403
+
+	encode gzip
+	log {
+		output file C:/mclabor/logs/gateway-access.log
+	}
+}
+
+# Start with the secret in the environment, never in this file:
+#   $env:MCLABOR_GATEWAY_SECRET = '<the same 48+ character value as GATEWAY_SECRET in backend\.env>'
+#   caddy run --config Caddyfile

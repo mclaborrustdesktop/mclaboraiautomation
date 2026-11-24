@@ -1,0 +1,54 @@
+﻿Repository safety report, 2026-11-25 (before the first push to GitHub; the repository may become public)
+Produced by: python tools\repo-check\scan_repo.py   (office names rule active: the names live only in the ignored tools\repo-check\local-names.txt)
+
+Repository check of the folder MC-Labor-AI-Automation
+  files that would be committed: 282   excluded by .gitignore: 28124
+  office names rule: ACTIVE (4 names from local-names.txt)
+
+Excluded (stay on this PC):
+  - backend/.env.off
+  - backend/.pytest_cache/ (whole folder)
+  - backend/.venv/ (whole folder)
+  - backend/app/__pycache__/ (whole folder)
+  - backend/app/routers/__pycache__/ (whole folder)
+  - backend/dbg_web_auth.db
+  - backend/mclabor_demo.db
+  - backend/mclabor_demo.db-shm
+  - backend/mclabor_demo.db-wal
+  - backend/office-hosts.txt
+  - backend/test_mclabor.db
+  - backend/test_mclabor.db-shm
+  - backend/test_mclabor.db-wal
+  - backend/test_web_auth.db
+  - backend/test_web_auth.db-shm
+  - backend/test_web_auth.db-wal
+  - backend/tests/__pycache__/ (whole folder)
+  - backend/web_auth.db
+  - backend/web_auth.db-shm
+  - backend/web_auth.db-wal
+  - backend/web_auth_staging.db
+  - backend/web_auth_staging.db-shm
+  - backend/web_auth_staging.db-wal
+  - deploy/vm/azure/cloudshell-package.zip
+  - docs/production-query-verification.txt
+  - frontend/.env.local
+  - frontend/.next/ (whole folder)
+  - frontend/next-env.d.ts
+  - frontend/node_modules/ (whole folder)
+  - frontend/tsconfig.tsbuildinfo
+  - tools/prod-check/__pycache__/ (whole folder)
+  - tools/prod-check/certificate-setup-state.json
+  - tools/prod-check/prodcheck.env
+  - tools/prod-check/reports/ (whole folder)
+  - tools/repo-check/__pycache__/ (whole folder)
+  - tools/repo-check/local-names.txt
+  - tools/staging/__pycache__/ (whole folder)
+
+BLOCKING findings: 1
+  !! docs/cloud/repo-safety-report-2026-11-25.txt:4  office infrastructure name (from local-names.txt)
+
+INFO findings (acceptable in a private repository; listed for the owner): 12
+  - e-mail address outside example domains: 8 line(s), e.g. backend/app/seed.py:164, backend/tests/test_api.py:170, backend/tests/test_railway_config.py:48, backend/tests/test_railway_config.py:54
+  - company e-mail domain: 4 line(s), e.g. deploy/vm/azure/budget.bicep:3, deploy/vm/azure/provision-vm.ps1:20, docs/access-without-login.md:110, docs/access-without-login.md:111
+
+RESULT: BLOCKED - fix the findings above before committing

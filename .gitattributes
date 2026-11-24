@@ -1,0 +1,6 @@
+# Line endings: LF in the repository and in the working copy (the scripts run in Linux containers and on Windows
+# PowerShell 5.1, which accepts LF). Images and packages are binary.
+* text=auto eol=lf
+*.png binary
+*.zip binary
+*.ico binary

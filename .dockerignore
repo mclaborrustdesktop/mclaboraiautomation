@@ -1,0 +1,20 @@
+# Build context for root-context images (deploy/railway/backend.Dockerfile). Keeps secrets, data and junk out of the image.
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.dpapi
+**/.venv
+**/node_modules
+**/.next
+**/__pycache__
+**/.pytest_cache
+**/*.pyc
+**/test_*.db
+tools/prod-check/reports
+tools/prod-check/prodcheck.env
+backend/.env.off
+deploy/vm/azure/cloudshell-package.zip

@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+@theme {
+  /* MC Labor Sources brand blues (from mclabor.com) */
+  --color-brand-50: #eef5fd;
+  --color-brand-100: #d7e8f9;
+  --color-brand-200: #b0d0f2;
+  --color-brand-300: #7ab3e6;
+  --color-brand-400: #3381cb;
+  --color-brand-500: #0061be;
+  --color-brand-600: #0055a8;
+  --color-brand-700: #003d86;
+  --color-brand-800: #00306a;
+  --color-brand-900: #002250;
+  --color-accent-300: #fbd27a;
+  --color-accent-400: #f5b53a;
+  --color-accent-500: #e9a21c;
+  --color-accent-600: #c98612;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --animate-fade-up: fade-up 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade-in: fade-in 0.25s ease-out both;
+  --animate-slide-in: slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-pop: pop 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+  @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slide-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes shimmer { from { background-position: -400px 0; } to { background-position: 400px 0; } }
+  @keyframes pop { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+
+  --animate-gradient-pan: gradient-pan 6s ease infinite;
+  --animate-caret: caret 1s steps(1) infinite;
+  --animate-dot: dot 1.2s ease-in-out infinite;
+  @keyframes gradient-pan { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+  @keyframes caret { 50% { opacity: 0; } }
+  @keyframes dot { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+}
+
+/* AI search "magic" styling */
+.ai-gradient {
+  background-image: linear-gradient(110deg, #7c3aed, #db2777, #f59e0b, #2457a8, #7c3aed);
+  background-size: 300% 300%;
+  animation: var(--animate-gradient-pan);
+}
+.ai-text {
+  background-image: linear-gradient(110deg, #7c3aed, #db2777 40%, #f59e0b 70%, #2457a8);
+  background-size: 300% 300%;
+  animation: var(--animate-gradient-pan);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ai-frame {
+  position: relative;
+  border-radius: 1.5rem;
+  padding: 2px;
+  background-image: linear-gradient(110deg, #c4b5fd, #f9a8d4, #fcd34d, #93c5fd, #c4b5fd);
+  background-size: 300% 300%;
+  animation: var(--animate-gradient-pan);
+  box-shadow: 0 20px 50px -24px rgba(124, 58, 237, 0.45);
+  transition: box-shadow 0.25s ease;
+}
+.ai-frame:focus-within {
+  background-image: linear-gradient(110deg, #7c3aed, #db2777, #f59e0b, #2457a8, #7c3aed);
+  box-shadow: 0 24px 60px -20px rgba(219, 39, 119, 0.45);
+}
+.ai-pill { @apply inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-xs transition-all hover:-translate-y-0.5 hover:border-violet-300 hover:text-slate-900 hover:shadow-md; }
+
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #e6e8ec;
+  --text: #0f172a;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.card-hover:hover {
+  box-shadow: 0 8px 24px -12px rgba(16, 24, 40, 0.18), 0 1px 3px rgba(16, 24, 40, 0.06);
+  border-color: #c9d3df;
+}
+
+.input {
+  @apply w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-brand-500 focus:ring-3 focus:ring-brand-100 disabled:bg-slate-50 disabled:text-slate-500;
+}
+
+.label {
+  @apply mb-1.5 block text-xs font-medium text-slate-600;
+}
+
+.btn, .btn-primary, .btn-secondary, .btn-accent, .btn-danger, .btn-ghost {
+  @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-all focus:outline-none focus-visible:ring-3 focus-visible:ring-brand-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+}
+.btn-primary { @apply bg-brand-500 text-white shadow-xs hover:bg-brand-600; }
+.btn-secondary { @apply border border-slate-200 bg-white text-slate-700 shadow-xs hover:border-slate-300 hover:bg-slate-50; }
+.btn-accent { @apply bg-brand-500 text-white shadow-xs hover:bg-brand-600; }
+.btn-danger { @apply border border-red-200 bg-white text-red-700 hover:bg-red-50; }
+.btn-ghost { @apply text-slate-600 hover:bg-slate-100 hover:text-slate-900; }
+
+.table { @apply w-full border-collapse text-sm; }
+.table th { @apply sticky top-0 z-[1] border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold tracking-wider text-slate-500 uppercase; }
+.table td { @apply border-b border-slate-100 px-4 py-3 align-middle text-slate-700; }
+.table tbody tr { transition: background-color 0.12s ease; }
+.table tbody tr:hover { @apply bg-slate-50; }
+
+.chip { @apply inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-0.5 text-xs font-medium text-brand-800 transition-colors; }
+.kbd { @apply inline-flex h-5 min-w-5 items-center justify-center rounded border border-slate-300 bg-white px-1 font-mono text-[10px] text-slate-500 shadow-xs; }
+
+.skeleton {
+  background: linear-gradient(90deg, #eef2f7 0px, #f8fafc 200px, #eef2f7 400px);
+  background-size: 800px 100%;
+  animation: var(--animate-shimmer);
+  border-radius: 0.5rem;
+}
+
+.nav-link { @apply relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900; }
+.nav-link[aria-current="page"] { @apply bg-brand-50 text-brand-700; }
+.nav-link[aria-current="page"]::before { content: ""; @apply absolute top-1.5 bottom-1.5 -left-3 w-[3px] rounded-r-full bg-brand-500; }
+
+mark.hl { background: #fde68a; color: inherit; border-radius: 2px; padding: 0 1px; }

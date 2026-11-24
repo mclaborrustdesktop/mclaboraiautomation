@@ -1,0 +1,14 @@
+identity,role,note
+# One line per employee. identity = initials as in tblOfficeStaff, OfficeStaffID number, or the e-mail they sign in with.
+# role = admin (everything) or user (look-up only). Lines starting with # are ignored. Keep the real roster OUT of the repository.
+# The identities below are the invented staff of the synthetic database (app/synthdb.py), for the staging rehearsal only.
+ARI,admin,synthetic - Alex Rivera
+JCH,admin,synthetic - Jordan Chen
+SOK,user,synthetic - Sam Okafor
+TNG,user,synthetic - Taylor Nguyen
+MPA,user,synthetic - Morgan Patel
+CDU,user,synthetic - Casey Dubois
+RHA,user,synthetic - Riley Haddad
+DKO,user,synthetic - Drew Kowalski
+JSA,user,synthetic - Jamie Santos
+ALI,user,synthetic - Avery Lindqvist

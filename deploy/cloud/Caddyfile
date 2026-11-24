@@ -1,0 +1,45 @@
+# Reverse proxy for the container deployment (docker-compose.yml). HTTPS with an automatic certificate for the
+# site name, sign-in by oauth2-proxy, the shared secret added to every API request, visitor headers stripped.
+# Only this container is reachable from outside; frontend and backend live on the internal network.
+{
+	email {$ACME_EMAIL}
+}
+
+{$SITE_NAME} {
+	# everyone must be signed in; oauth2-proxy answers 202 (with the e-mail) or 401
+	forward_auth auth:4180 {
+		uri /oauth2/auth
+		copy_headers X-Auth-Request-Email
+	}
+	handle /oauth2/* {
+		reverse_proxy auth:4180 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Proto https
+		}
+	}
+	handle /api/* {
+		request_header -X-Gateway-Secret
+		request_header -Cf-Access-Authenticated-User-Email
+		request_header -X-MS-CLIENT-PRINCIPAL-NAME
+		request_header -X-MS-CLIENT-PRINCIPAL-IDP
+		request_header X-Gateway-Secret {file./run/secrets/gateway_secret}
+		reverse_proxy backend:8000
+	}
+	handle {
+		request_header -X-Gateway-Secret
+		request_header -X-Auth-Request-Email
+		request_header -Cf-Access-Authenticated-User-Email
+		reverse_proxy frontend:3000
+	}
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+	}
+	log {
+		output stdout
+		format json
+	}
+}

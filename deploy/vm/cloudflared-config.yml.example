@@ -1,0 +1,33 @@
+# cloudflared tunnel configuration for the MC Labor VM. Copy to C:\mclabor\cloudflared\config.yml after
+# `cloudflared tunnel create mclabor-vm` has written the credentials file. Both hostnames are protected by
+# Cloudflare Access applications (one per environment, each with its own AUD tag -> CLOUDFLARE_ACCESS_AUD).
+tunnel: <TUNNEL-ID>
+credentials-file: C:\mclabor\cloudflared\<TUNNEL-ID>.json
+logfile: C:\mclabor\logs\cloudflared.log
+loglevel: info
+
+ingress:
+  # production
+  - hostname: app.mclabor.example
+    path: ^/api/.*
+    service: http://127.0.0.1:8000
+    originRequest:
+      connectTimeout: 10s
+      noTLSVerify: false
+  - hostname: app.mclabor.example
+    service: http://127.0.0.1:3000
+  # staging (synthetic data first, later the restored copy)
+  - hostname: staging.mclabor.example
+    path: ^/api/.*
+    service: http://127.0.0.1:8100
+  - hostname: staging.mclabor.example
+    service: http://127.0.0.1:3100
+  # everything else
+  - service: http_status:404
+
+# Private network for the Microsoft Access / QuickBooks PCs: their WARP client reaches the VM's private address
+# (10.20.1.4, port 1433) through this tunnel. Enabled per tunnel; the route itself is added with
+#   cloudflared tunnel route ip add 10.20.1.0/24 mclabor-vm
+# and limited in Zero Trust > Settings > Network to the "SQL users" group and port 1433 (and 3389 for administrators).
+warp-routing:
+  enabled: true

@@ -1,0 +1,393 @@
+{
+ "database": "McLabor",
+ "schema": "dbo",
+ "tables": {
+  "tblCustomer": {
+   "BillRateOTMultiplier": "number",
+   "City": "text",
+   "CollectionsNote": "text",
+   "ContractDate": "date",
+   "ContractOnFile": "bool",
+   "CreditLimit": "number",
+   "CustBusName": "text",
+   "CustContractWith_PayrollCoID": "int",
+   "CustEmail": "text",
+   "CustEntryTimestamp": "datetime",
+   "CustEntryUserName": "text",
+   "CustFaxNum": "text",
+   "CustStatusID": "int",
+   "CustWebSiteHLink": "text",
+   "CustomerDescription": "text",
+   "CustomerID": "int",
+   "CustomerLicenseNumber": "text",
+   "CustomerNote": "text",
+   "CustomerTypeID": "int",
+   "EmployeeSize": "text",
+   "FutureCall": "date",
+   "FutureSales": "bool",
+   "Industry": "text",
+   "InvoiceNote": "text",
+   "LaborRateAFrom": "number",
+   "LaborRateATo": "number",
+   "LaborRateBFrom": "number",
+   "LaborRateBTo": "number",
+   "OnHold": "bool",
+   "Phone": "text",
+   "RevenuePerYear": "number",
+   "SalesStatusID": "int",
+   "SalesmanID": "int",
+   "State": "text",
+   "StateCityID": "int",
+   "Street": "text",
+   "Zip": "text"
+  },
+  "tblCustomerContacts": {
+   "CustomerContactCell": "text",
+   "CustomerContactEmail": "text",
+   "CustomerContactFName": "text",
+   "CustomerContactID": "int",
+   "CustomerContactLName": "text",
+   "CustomerContactNotes": "text",
+   "CustomerContactOfficePhone": "text",
+   "CustomerContactPriority": "int",
+   "CustomerContactTimestamp": "datetime",
+   "CustomerContactTitleID": "int",
+   "CustomerContactUserName": "text",
+   "CustomerID": "int"
+  },
+  "tblCustomerNotes": {
+   "CustomerID": "int",
+   "CustomerNote": "text",
+   "CustomerNoteActive": "bool",
+   "CustomerNoteID": "int",
+   "CustomerNoteTimestamp": "datetime",
+   "CustomerNoteUserName": "text"
+  },
+  "tblEmployee": {
+   "BaseSalary": "number",
+   "EmAdminNotes": "text",
+   "EmApplComplete": "bool",
+   "EmCity": "text",
+   "EmContractWith_PayrollCoID": "int",
+   "EmEmail": "text",
+   "EmEmployeeStatusID": "int",
+   "EmEntryTimestamp": "datetime",
+   "EmEntryUserName": "text",
+   "EmExperienceID": "int",
+   "EmFirstName": "text",
+   "EmHomePhone": "text",
+   "EmHowReferredID": "int",
+   "EmLastName": "text",
+   "EmLicenseDateExpires": "date",
+   "EmLicenseNum": "text",
+   "EmLicensedIn": "text",
+   "EmMiddle": "text",
+   "EmMobilePhone": "text",
+   "EmQualificationID": "int",
+   "EmReferredBy": "text",
+   "EmSalesNotes": "text",
+   "EmState": "text",
+   "EmStateCityID": "int",
+   "EmStreet": "text",
+   "EmTradeID": "int",
+   "EmZip": "text",
+   "EmployeeDuplicate": "bool",
+   "EmployeeID": "int",
+   "EmployeeNoCommunication": "bool",
+   "JobApplComplete": "bool",
+   "OSHA10": "text",
+   "PostEmployeeAsAvailable": "bool",
+   "Recruiter": "bool",
+   "ReferrerEmployeeID": "int",
+   "SubTrade1ID": "int",
+   "SubTrade2ID": "int",
+   "YearsInTradeID": "int"
+  },
+  "tblEmployeeB": {
+   "EmployeeID": "int",
+   "WillTravel": "text"
+  },
+  "tblEmployeeLicenses": {
+   "EmployeeID": "int",
+   "EmployeeLicenseCopyOnFile": "text",
+   "EmployeeLicenseExpDate": "date",
+   "EmployeeLicenseID": "int",
+   "EmployeeLicenseNotes": "text",
+   "EmployeeLicenseNumber": "text",
+   "EmployeeLicenseStateID": "int",
+   "EmployeeLicenseTradeID": "int",
+   "EmployeeLicenseTypeID": "int"
+  },
+  "tblEmployeeNotes": {
+   "EmployeeID": "int",
+   "EmployeeNote": "text",
+   "EmployeeNoteCustomerID": "int",
+   "EmployeeNoteID": "int",
+   "EmployeeNoteTimestamp": "datetime",
+   "EmployeeNoteTypeID": "int",
+   "EmployeeNoteUserName": "text"
+  },
+  "tblFeature": {
+   "ControlName": "text",
+   "FeatureActive": "bool",
+   "FeatureDescription": "text",
+   "FeatureID": "int",
+   "FeatureSort": "int",
+   "FeatureTitle": "text",
+   "ObjectName": "text"
+  },
+  "tblOfficeStaff": {
+   "Initials": "text",
+   "OfficeStaffActive": "bool",
+   "OfficeStaffCanDelete": "bool",
+   "OfficeStaffEmail": "text",
+   "OfficeStaffEmployeeResearch": "bool",
+   "OfficeStaffFirstName": "text",
+   "OfficeStaffFullName": "text",
+   "OfficeStaffHideHours": "bool",
+   "OfficeStaffID": "int",
+   "OfficeStaffLastName": "text",
+   "OfficeStaffTitle": "text",
+   "OfficeStaffTrackingReportEmailReceive": "bool",
+   "Profile": "bool"
+  },
+  "tblOfficeStaffActivity": {
+   "OfficeStaffActivityID": "int",
+   "OfficeStaffActivityObjectID": "int",
+   "OfficeStaffActivityObjectName": "text",
+   "OfficeStaffActivityTimestampStart": "datetime",
+   "OfficeStaffID": "int"
+  },
+  "tblOfficeStaffPermission": {
+   "FeatureID": "int",
+   "OfficeStaffID": "int",
+   "OfficeStaffPermissionID": "int"
+  },
+  "tblProject": {
+   "ARateQty": "int",
+   "BRateQty": "int",
+   "CRateQty": "int",
+   "ContractAmount": "number",
+   "ContractBalanceOwed": "number",
+   "ContractTotalPayments": "number",
+   "CustomerContact": "text",
+   "CustomerEmail": "text",
+   "CustomerID": "int",
+   "CustomerPhone": "text",
+   "EndDate": "date",
+   "GCOnSite": "bool",
+   "JobBeingManned": "bool",
+   "JobNote": "text",
+   "NumberOfEmployees": "int",
+   "OCIPJob": "bool",
+   "ParentProjectID": "int",
+   "ProjNote": "text",
+   "ProjOfficeNote": "text",
+   "ProjStartTime": "text",
+   "ProjStatusID": "int",
+   "ProjectEntryTimestamp": "datetime",
+   "ProjectEntryUserName": "text",
+   "ProjectID": "int",
+   "ProjectWCCID": "int",
+   "RateJob": "bool",
+   "ShiftDifferential": "bool",
+   "SiteName": "text",
+   "SiteStateCityID": "int",
+   "SiteStreet": "text",
+   "SiteZip": "text",
+   "StartDate": "date"
+  },
+  "tblPullDownContractWith_PayrollCo": {
+   "PullDownContractWith_PayrollCoID": "int",
+   "PullDownContractWith_PayrollCoInitials": "text",
+   "PullDownContractWith_PayrollCoName": "text",
+   "PullDownContractWith_PayrollCoSort": "int"
+  },
+  "tblPullDownCustStatus": {
+   "PulldownCustStatus": "text",
+   "PulldownCustStatusID": "int",
+   "PulldownCustStatusSort": "int"
+  },
+  "tblPullDownCustomerContactTitles": {
+   "PullDownCustomerContactTitle": "text",
+   "PullDownCustomerContactTitleID": "int",
+   "PullDownCustomerContactTitleSort": "int"
+  },
+  "tblPullDownCustomerTypes": {
+   "PullDownCustomerType": "text",
+   "PullDownCustomerTypeDivisionID": "int",
+   "PullDownCustomerTypeID": "int",
+   "PullDownCustomerTypeSort": "int"
+  },
+  "tblPullDownDivisions": {
+   "PullDownDivision": "text",
+   "PullDownDivisionActive": "bool",
+   "PullDownDivisionID": "int",
+   "PullDownDivisionSort": "int"
+  },
+  "tblPullDownEmployeeNoteTypes": {
+   "PullDownEmployeeNoteType": "text",
+   "PullDownEmployeeNoteTypeID": "int",
+   "PullDownEmployeeNoteTypeSort": "int"
+  },
+  "tblPullDownEmployeeStatus": {
+   "PullDownEmployeeStatus": "text",
+   "PullDownEmployeeStatusID": "int",
+   "PullDownEmployeeStatusSort": "int"
+  },
+  "tblPullDownExperience": {
+   "PullDownExperience": "text",
+   "PullDownExperienceID": "int",
+   "PullDownExperienceSort": "int"
+  },
+  "tblPullDownLicenseTypes": {
+   "PullDownLicenseType": "text",
+   "PullDownLicenseTypeActive": "bool",
+   "PullDownLicenseTypeID": "int",
+   "PullDownLicenseTypeSort": "int"
+  },
+  "tblPullDownPayrollCoOnSite": {
+   "PullDownPayrollCoOnSiteActive": "bool",
+   "PullDownPayrollCoOnSiteID": "int",
+   "PullDownPayrollCoOnSiteInitials": "text",
+   "PullDownPayrollCoOnSiteName": "text",
+   "PullDownPayrollCoOnSiteSort": "int"
+  },
+  "tblPullDownProjStatus": {
+   "PullDownProjStatus": "text",
+   "PullDownProjStatusID": "int",
+   "PullDownProjStatusSort": "int"
+  },
+  "tblPullDownQualifications": {
+   "PullDownQualification": "text",
+   "PullDownQualificationDivisionID": "int",
+   "PullDownQualificationID": "int",
+   "PullDownQualificationSort": "int"
+  },
+  "tblPullDownSalesStatus": {
+   "PullDownSalesStatus": "text",
+   "PullDownSalesStatusID": "int",
+   "PullDownSalesStatusSort": "int"
+  },
+  "tblPullDownSalesman": {
+   "OfficeStaffID": "int",
+   "PullDownSalesmanActive": "bool",
+   "PullDownSalesmanCell": "text",
+   "PullDownSalesmanEmail": "text",
+   "PullDownSalesmanFName": "text",
+   "PullDownSalesmanID": "int",
+   "PullDownSalesmanLName": "text",
+   "PullDownSalesmanSort": "int",
+   "PullDownSalesmanTitle": "text"
+  },
+  "tblPullDownStateCities": {
+   "City": "text",
+   "PullDownStateCityActive": "bool",
+   "PullDownStateCityID": "int",
+   "PullDownStateCitySort": "int",
+   "StateID": "int"
+  },
+  "tblPullDownStates": {
+   "PullDownState": "text",
+   "PullDownStateID": "int",
+   "PullDownStateName": "text",
+   "PullDownStateSort": "int"
+  },
+  "tblPullDownStatusFlag": {
+   "PullDownStatusFlag": "text",
+   "PullDownStatusFlagDesc": "text",
+   "PullDownStatusFlagID": "int",
+   "PullDownStatusFlagSort": "int"
+  },
+  "tblPullDownTrade": {
+   "PullDownTrade": "text",
+   "PullDownTradeDivisionID": "int",
+   "PullDownTradeID": "int",
+   "PullDownTradeSort": "int",
+   "PullDownTradeSwitch": "text"
+  },
+  "tblPullDownWCC": {
+   "PullDownWCC": "text",
+   "PullDownWCCActive": "bool",
+   "PullDownWCCDesc": "text",
+   "PullDownWCCDivisionID": "int",
+   "PullDownWCCID": "int",
+   "PullDownWCCSort": "int"
+  },
+  "tblPullDownYearsInTrade": {
+   "PullDownYearsInTrade": "text",
+   "PullDownYearsInTradeID": "int"
+  },
+  "tblTracking": {
+   "AssignWeek": "int",
+   "AssignYear": "int",
+   "AssignmentTimestamp": "datetime",
+   "AssignmentUserName": "text",
+   "BillRate": "number",
+   "BillRateOT": "number",
+   "CalcProfitMargin": "number",
+   "CustomerID": "int",
+   "DirVerified": "bool",
+   "DirectionsSentEmail": "bool",
+   "DirectionsSentText": "bool",
+   "EmGrossPayroll": "number",
+   "EmployeeID": "int",
+   "FriHours": "number",
+   "Grade": "text",
+   "HoursNote": "text",
+   "InvoiceAmount": "number",
+   "MonHours": "number",
+   "MonStatusFlagID": "int",
+   "OTPayRate": "number",
+   "OvertimeHours": "number",
+   "PayRate": "number",
+   "PayrollCoOnSiteID": "int",
+   "PayrollInfoSent": "bool",
+   "Placeholder": "bool",
+   "ProjectID": "int",
+   "RegularHours": "number",
+   "SatHours": "number",
+   "SunHours": "number",
+   "ThuHours": "number",
+   "TotalHours": "number",
+   "TrackingID": "int",
+   "TueHours": "number",
+   "WCC": "text",
+   "WedHours": "number",
+   "WeekEndingDate": "date"
+  }
+ },
+ "sensitive_columns": {
+  "tblEmployee": [
+   "BankAccountActionID",
+   "BankAccountNumber",
+   "BankAccountTypeID",
+   "BankName",
+   "BankRoutingNumber",
+   "Citizenship",
+   "Dependents",
+   "EmCountryOfBirth",
+   "EmDOB",
+   "EmI9Notes",
+   "EmRaceID",
+   "EmSex",
+   "EmW4Notes",
+   "I9Complete",
+   "SSNum",
+   "USCitizen"
+  ],
+  "tblOfficeStaff": [
+   "OfficeStaffPassword"
+  ]
+ },
+ "withheld_but_used_by_demo": {
+  "tblEmployee": [
+   "EmDOB",
+   "USCitizen",
+   "I9Complete"
+  ],
+  "tblOfficeStaff": [
+   "OfficeStaffPassword"
+  ]
+ }
+}

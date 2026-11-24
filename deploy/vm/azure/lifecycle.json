@@ -1,0 +1,22 @@
+{
+  "rules": [
+    {
+      "enabled": true,
+      "name": "daily-backups-35-days",
+      "type": "Lifecycle",
+      "definition": {
+        "actions": { "baseBlob": { "delete": { "daysAfterModificationGreaterThan": 35 } } },
+        "filters": { "blobTypes": [ "blockBlob" ], "prefixMatch": [ "sqlbackups/daily/" ] }
+      }
+    },
+    {
+      "enabled": true,
+      "name": "monthly-backups-12-months",
+      "type": "Lifecycle",
+      "definition": {
+        "actions": { "baseBlob": { "tierToArchive": { "daysAfterModificationGreaterThan": 45 }, "delete": { "daysAfterModificationGreaterThan": 366 } } },
+        "filters": { "blobTypes": [ "blockBlob" ], "prefixMatch": [ "sqlbackups/monthly/" ] }
+      }
+    }
+  ]
+}
