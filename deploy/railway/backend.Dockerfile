@@ -19,9 +19,10 @@ RUN pip install -r requirements.txt
 
 COPY backend/app ./app
 COPY docs/schema ./docs/schema
+COPY tools/prod-check/required_schema.json ./tools/prod-check/required_schema.json
 RUN useradd --create-home --uid 10001 app && chown -R app:app /app
 USER app
-ENV SCHEMA_CSV_DIR=/app/docs/schema
+ENV SCHEMA_CSV_DIR=/app/docs/schema REQUIRED_SCHEMA_JSON=/app/tools/prod-check/required_schema.json
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

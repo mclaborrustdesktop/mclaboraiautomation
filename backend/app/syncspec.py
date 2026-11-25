@@ -8,6 +8,7 @@ created without the sensitive columns, so they cannot even hold such data.
 from __future__ import annotations
 
 import json
+import os
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -16,7 +17,8 @@ from sqlalchemy import Column, Index, Integer, MetaData, Table
 
 from .config import BACKEND_DIR, settings
 
-REQUIRED = BACKEND_DIR.parent / "tools" / "prod-check" / "required_schema.json"
+# The approved tables/columns list. In the container image it is copied next to the app and named by REQUIRED_SCHEMA_JSON.
+REQUIRED = Path(os.environ.get("REQUIRED_SCHEMA_JSON") or BACKEND_DIR.parent / "tools" / "prod-check" / "required_schema.json")
 
 # Column names that are refused everywhere, approved list or not (belt and braces for the sensitive list).
 FORBIDDEN_NAME = re.compile(r"(ssn|socialsecurity|bank|routing|dob\b|birth|password|passwd|citizen|i9\b|\brace|emsex|w4|dependents|driverlic|dlnum|passport)", re.I)
