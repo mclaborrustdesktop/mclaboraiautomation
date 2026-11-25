@@ -92,3 +92,59 @@ railway variable list --service backend --json   -> names only; never paste the 
 Do not: retry blocked deployments in a loop (each attempt is logged against the workspace), create another trial
 account or project, add a card or change the plan without the owner's approval, expose the backend or PostgreSQL,
 connect to the office servers, or load anything but the synthetic file.
+
+## 5. Third workspace (ray@mclabor.com, "mclaborrustdesktop's Projects"): the restriction as shown on the Standing page
+
+Read on 2026-11-25 at Workspace Settings -> Restrictions (`railway.com/workspace/restrictions`), two active entries,
+both "Upgrade required", scope Workspace, issued 2026-11-25, identical text:
+
+> **What this restriction does.** We limited this workspace after detecting unusual activity. It can't create new
+> resources or deploy until it upgrades to a paid plan, which lifts this restriction automatically. Adding a payment
+> method alone does not lift this restriction.
+>
+> **Why this happened.** Suspicious activity. Activity in this workspace matches patterns we associate with abuse.
+>
+> **Lift this restriction.** This restriction can't be appealed. Upgrade to a paid plan to lift it.
+
+So for this workspace there is **no appeal**; the only documented path is the Hobby plan (the page's "Upgrade plan"
+button). The Plans page shows the account on the Trial Plan with "30 days or $5.00 left". The restricted project
+keeps its services, settings, variables, domain and (empty) volume; nothing was retried.
+
+## 6. Monthly Railway cost for 20 application users (list prices read from railway.com/pricing on 2026-11-25)
+
+Unit prices: CPU 0.00000772 USD per vCPU-second (= 20.0 USD per vCPU-month), memory 0.00000386 USD per GB-second
+(= 10.0 USD per GB-month), volumes 0.00000006 USD per GB-second (= 0.16 USD per GB-month), egress 0.05 USD per GB.
+Railway bills active CPU and held memory per second; the Hobby plan is a 5 USD monthly minimum that includes 5 USD of
+usage, always-on services, up to 5 GB of volumes, built-in database and volume backups, 7-day logs, usage hard/soft limits.
+
+Measured basis (docs/cloud/11, the 20-user load test): backend with 2 workers holds about 250 MB under load and about
+150 MB idle; 20 people searching is about 1.5 CPU-seconds per second in a busy minute and near zero outside office hours.
+
+| Service | Expected (office hours busy, idle otherwise) | High (busy all day) | Basis |
+|---|---|---|---|
+| backend (FastAPI, 2 workers) | 0.30 GB x 10 + 0.08 vCPU x 20 = **4.6 USD** | 0.5 GB + 0.3 vCPU = 11 USD | memory held all month, CPU only while searching |
+| frontend (Next.js standalone) | 0.15 GB x 10 + 0.02 vCPU x 20 = **1.9 USD** | 0.3 GB + 0.1 vCPU = 5 USD | server-rendered pages and the /api proxy |
+| PostgreSQL (mirror, synthetic or real size) | 0.30 GB x 10 + 0.05 vCPU x 20 + 1 GB volume = **4.2 USD** | 0.6 GB + 0.2 vCPU + 2 GB = 10.3 USD | 33 mirrored tables, indexes in docs/cloud/13 |
+| egress | 20 users, JSON pages: under 1 GB = **0.05 USD** | 5 GB = 0.25 USD | |
+| **usage total** | **about 11 USD** | about 27 USD | |
+| Hobby minimum 5 USD, of which 5 USD is usage credit | counts toward the first 5 USD | | |
+| **bill** | **about 11 USD per month** (5 minimum + 6 above the credit) | about 27 USD | |
+
+Staging and production as two projects on the same Hobby workspace: about 22 USD per month expected; stop the staging
+services between test days and it falls to about 12 USD. The old Azure VM plan for the same users was about 99 USD.
+
+## 7. Spending limits and resource settings to apply right after the upgrade (owner's approval first)
+
+1. Workspace Settings -> Usage limits (Hobby and above): **soft limit 15 USD** (e-mail alert), **hard limit 30 USD**
+   (Railway stops the services at the hard limit; the volume and the configuration remain). Review after the first
+   invoice and tighten.
+2. Each service: 1 replica (set), no autoscaling, region `us-east` (iad, nearest to the office), restart policy
+   ON_FAILURE with 5 retries (set).
+3. backend: `WEB_WORKERS=2` (set). Drop to 1 only if memory matters more than response time; 20 users do not need 4.
+4. frontend: nothing to tune; the standalone build is about 150 MB.
+5. PostgreSQL: Railway's built-in backups on (Hobby); the encrypted R2 backup service in `deploy/railway/backup` is
+   the belt-and-braces option for later. Keep the TCP proxy off; the volume stays at 500 MB until the real-size
+   mirror needs more (about 1 GB at full size).
+6. Alerts: Railway's e-mail alerts for deployment failures and the usage soft limit; the website's own `/api/sync/status`
+   banner covers stale data.
+7. Nothing else runs: no cron, no sandboxes, no agent spend (set the Railway Agent limit to 0 in Workspace Settings).
