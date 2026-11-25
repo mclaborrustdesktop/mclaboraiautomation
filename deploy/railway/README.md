@@ -53,13 +53,17 @@ sign-in without a website login screen, encrypted backups outside Railway.
    `env/backend.staging.env.example` (seal `JWT_SECRET`). Deploy. Private networking is on by default.
 4. Add service **frontend**: root directory `frontend`, variables from `env/frontend.env.example`. Deploy. Generate a
    Railway domain for now.
-5. Build the database (one-off command on the backend service, Railway > service > "Run command", or a shell):
+5. Fill the mirror from this PC, through the website's own address (the database has no public port; no shell is
+   needed): build a synthetic SOURCE file, then run the sync agent against it with `--bootstrap`, which creates the
+   mirror tables and sends the approved tables:
    ```
-   python -m app.pgschema apply "$STAGING_DATABASE_URL" --indexes --constraints
-   python -m app.synthdb "$STAGING_DATABASE_URL" 0.2 --fill-existing
-   python -m app.webauth set-password ARI        (a synthetic administrator; then grant others on the Users page)
+   backend\.venv\Scripts\python.exe -m app.synthdb "sqlite:///C:/MCLabor/synthetic-source.db" 0.2
+   set SYNC_API_KEY=<the sealed value>
+   backend\.venv\Scripts\python.exe -m app.syncagent run --source-url sqlite:///C:/MCLabor/synthetic-source.db --api https://<frontend domain> --bootstrap --full
    ```
-   Restart the backend; `/api/ready` must answer `ready`.
+   The first administrator (`WEB_ADMINS=ARI`, a synthetic person) signs in once with the sealed one-time
+   `WEB_BOOTSTRAP_PASSWORD`, is made to choose a real password, then that variable is deleted. Others are granted on the
+   Users page. `/api/ready` must answer `ready`.
 6. Cloudflare: add `staging.<domain>` as a proxied CNAME to the frontend's Railway domain; create an Access
    application for that hostname with a policy allowing the staff identity-provider group; copy the AUD tag into
    `CLOUDFLARE_ACCESS_AUD`; set `CLOUDFLARE_ACCESS_TEAM_DOMAIN`. Add the custom domain to the frontend service in

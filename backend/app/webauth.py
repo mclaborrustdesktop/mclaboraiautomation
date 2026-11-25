@@ -18,6 +18,7 @@ Command line (run from the backend folder):
 """
 from __future__ import annotations
 
+import hmac
 import sys
 from datetime import datetime, timedelta
 
@@ -195,6 +196,26 @@ def set_password(staff_id: int, password: str, must_change: bool = False) -> Non
         cred.locked_until = None
         cred.password_changed_at = datetime.utcnow()
         s.commit()
+
+
+def bootstrap_first_admin(staff_id: int | None, initials: str | None, email: str | None, offered: str) -> bool:
+    """First sign-in on a fresh real-data deployment: WEB_BOOTSTRAP_PASSWORD (a sealed, one-time setting) is accepted as
+    the password of the FIRST name in WEB_ADMINS while that person has no web password yet. It is stored as their
+    password with "must change" set, so the sign-in continues with choosing a real one. It never replaces an existing
+    password and never applies to anyone else. Returns True when it was just applied."""
+    pw = (settings.web_bootstrap_password or "").strip()
+    first = next((a.strip().lower() for a in (settings.web_admins or "").split(",") if a.strip()), "")
+    if not pw or len(pw) < 16 or not first or staff_id is None or not settings.is_real_data:
+        return False
+    if first not in ((initials or "").strip().lower(), (email or "").strip().lower()):
+        return False
+    if not hmac.compare_digest(offered.encode(), pw.encode()):
+        return False
+    with _session() as s:
+        if s.get(WebCredential, staff_id) is not None:
+            return False
+    set_password(staff_id, pw, must_change=True)
+    return True
 
 
 def import_hash(staff_id: int, password_hash: str) -> None:

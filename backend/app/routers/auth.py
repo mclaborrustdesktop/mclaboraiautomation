@@ -33,6 +33,8 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         )
     ).scalars().first()
     result, must_change = webauth.check_password(user.OfficeStaffID if user else None, body.password)
+    if result == "not-set" and user is not None and webauth.bootstrap_first_admin(user.OfficeStaffID, user.Initials, user.OfficeStaffEmail, body.password):
+        result, must_change = "ok", True  # the first administrator's one-time bootstrap password (WEB_BOOTSTRAP_PASSWORD)
     if result == "locked":
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, f"Too many failed attempts. Try again in {webauth.LOCK_MINUTES} minutes.")
     if result != "ok":

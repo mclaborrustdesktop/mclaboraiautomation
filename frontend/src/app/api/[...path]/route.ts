@@ -13,7 +13,8 @@ import type { NextRequest } from "next/server";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const FORWARD = ["authorization", "content-type", "accept", "cookie", "cf-access-jwt-assertion", "cf-access-authenticated-user-email", "x-request-id", "if-none-match"];
+const FORWARD = ["authorization", "content-type", "accept", "cookie", "cf-access-jwt-assertion", "cf-access-authenticated-user-email", "x-request-id", "if-none-match",
+  "x-sync-key"];  // the office sync agent's key: the agent reaches the backend only through this proxy
 const RETURN = ["content-type", "x-request-id", "retry-after", "cache-control", "etag"];
 
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }): Promise<Response> {

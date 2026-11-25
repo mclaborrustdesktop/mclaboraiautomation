@@ -150,6 +150,11 @@ class Settings(BaseSettings):
     # user management or the system status page, and can never change records. Same format as WEB_ADMINS.
     # A person on neither list is refused at sign-in and at the gateway, even with a web password. Ignored in the demo.
     web_users: str = ""
+    # First sign-in on a fresh hosted deployment (no database shell needed): a sealed, one-time value accepted as the
+    # password of the FIRST name in WEB_ADMINS while that person has no web password yet. It becomes their password
+    # with "must change" set, so the first sign-in ends in choosing a real one; then remove this setting. It never
+    # replaces an existing password and never applies to anyone else. 16+ characters, not the demo password.
+    web_bootstrap_password: str | None = None
     # With real data, administrators grant and remove website access in the website itself (Users page, or
     # `python -m app.webauth access-set`), stored in the web sign-in file - no restart, no redeploy. The lists above
     # are the bootstrap. The company's maximum number of website users (decision 2026-11-23: 20): the website refuses
@@ -489,6 +494,9 @@ class Settings(BaseSettings):
             p.append("ACCESS_MODE=gateway needs GATEWAY_TRUSTED_PROXIES: the address(es) the gateway forwards from, e.g. 127.0.0.1.")
         if mode == "gateway" and "any" in self.gateway_trusted_proxy_set and platform != "cloudflare-access":
             p.append("GATEWAY_TRUSTED_PROXIES=any is only allowed with GATEWAY_PLATFORM=cloudflare-access (the signed token is the proof).")
+        boot = (self.web_bootstrap_password or "").strip()
+        if boot and (len(boot) < 16 or boot == self.demo_password or not (self.web_admins or "").strip()):
+            p.append("WEB_BOOTSTRAP_PASSWORD must be 16 or more characters, not the demo password, and WEB_ADMINS must name the first administrator.")
         if self.anthropic_api_key and not (self.claude_real_data_approval or "").strip():
             p.append("ANTHROPIC_API_KEY is set, so questions about real data would go to an outside AI service. Remove the key, "
                      "or record the owner's written approval in CLAUDE_REAL_DATA_APPROVAL.")

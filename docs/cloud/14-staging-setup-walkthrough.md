@@ -75,8 +75,10 @@ objects older than 60 days (the backup script keeps 35; this is the belt).
 3. **+ New -> Database -> PostgreSQL**. Leave the TCP proxy off.
 4. **+ New -> GitHub repo** again for `backend`: Root directory `/`, Settings -> Config-as-code path
    `deploy/railway/backend.railway.json`. Variables from `deploy/railway/env/backend.staging.env.example`:
-   the two Railway references for the database, the Cloudflare values from step 2, `JWT_SECRET` and `SYNC_API_KEY`
-   generated with `python -c "import secrets;print(secrets.token_urlsafe(48))"` and **sealed**.
+   the two Railway references for the database, the Cloudflare values from step 2, `JWT_SECRET`, `SYNC_API_KEY` and
+   the one-time `WEB_BOOTSTRAP_PASSWORD` generated with `python -c "import secrets;print(secrets.token_urlsafe(48))"`
+   and **sealed**. Until the Cloudflare domain exists, `ACCESS_MODE=login` (the website's own sign-in page) works on
+   the Railway-generated HTTPS address; switch to `gateway` with the Cloudflare values in step 6.
 5. Rename the environment to `staging`. Deploy both services; wait for the health checks (`/api/ready`, `/healthz`).
 6. Custom domain: frontend service -> Settings -> Networking -> Custom domain `staging.<domain>`; add the CNAME
    Railway shows in Cloudflare DNS with the proxy ON (orange cloud). Remove the Railway-generated domain.
