@@ -91,7 +91,7 @@ def test_cloud_side_budget_refuses_mass_deletion_even_from_a_misbehaving_agent(s
     src, mirror, state, target = synced
     n_emp = _count(mirror, "tblEmployee")
     total = sum(max(0, v) for v in syncmirror.row_counts(target.engine).values())
-    run_id = target.begin_run("incremental", "misbehaving agent")                      # guard in place: at most 10% of the mirror (min 500)
+    run_id = target.begin_run("incremental", "sqlite (given)")   # same source as the mirror (another source is refused); guard in place: at most 10% of the mirror (min 500)
     budget = max(syncmirror.MAX_RUN_DELETE_ROWS, int(total * syncmirror.MAX_RUN_DELETE_FRACTION))
     ids = list(range(1, n_emp + 1))
     assert len(ids) > budget
@@ -102,6 +102,6 @@ def test_cloud_side_budget_refuses_mass_deletion_even_from_a_misbehaving_agent(s
     with pytest.raises(syncmirror.MassDeleteRefused):
         target.delete(run_id, "tblEmployee", ids[10:10 + budget])                          # cumulative across batches
     target.finish_run(run_id, "failed", error="test")
-    run_id = target.begin_run("incremental", "agent with --allow-mass-delete", allow_mass_delete=True)
+    run_id = target.begin_run("incremental", "sqlite (given)", allow_mass_delete=True)
     assert target.delete(run_id, "tblEmployee", ids[10:10 + budget]) == budget
     target.finish_run(run_id, "success", deleted=budget)

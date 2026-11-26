@@ -29,12 +29,18 @@ settings, variables, then the source): PostgreSQL (private, 1 GB volume), `backe
 `SITE_PASSWORD_LABEL=production-<date>`, new `JWT_SECRET` and `SYNC_API_KEY`, `SITE_MODE=search-only`,
 `WEB_ADMINS` = the real administrators' initials; `frontend` with its own domain. Volume backups daily + weekly and
 point-in-time recovery on. Nothing from staging is reused: different database, different secrets, different password.
-No synthetic data is ever loaded into it (the synthetic builder refuses production settings).
+No synthetic data is ever loaded into it: the synthetic builder refuses production settings, and the ingest API refuses
+any run whose announced source differs from `SYNC_EXPECTED_SOURCE` (the live server name / `McLabor`) or from the
+source of the mirror's earlier successful runs (HTTP 409, `backend/app/syncmirror.py`).
 
-**Gate 3 - access protection in front of production (owner + Cloudflare).** Cloudflare Access on `search.<domain>`
-with the per-employee certificate policy (`docs/cloud/18`, section 2), the Railway-generated domain removed,
-`GATEWAY_PLATFORM=cloudflare-access` + team domain + AUD on the backend so every request carries a verified identity.
-Tested with two test certificates before any real record exists.
+**Gate 3 - access protection in front of production (owner; Cloudflare POSTPONED on 2026-11-26).** The boundary is
+the site password plus the approved-device check (`docs/cloud/18`, section 2): `SITE_DEVICE_APPROVAL=true`,
+`WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` = the production host, `SITE_DEVICE_LIMIT=40`. Before any real record exists:
+the owner's PC registers and is approved (bootstrap code or operator command line), signs in through Windows Hello,
+a second administrator device is approved, a throw-away device is approved then revoked and its session is seen to
+die, the unlock log shows every step, anonymous and forged requests are refused, writes answer 423, backend and
+database have no public address, a volume snapshot exists and has been restored into a scratch service. Cloudflare
+(rate-limit rule, custom host, optional Access) can be added later; moving to a custom host re-enrols every device.
 
 **Gate 4 - the initial import (owner's explicit approval, after gates 1-3 and a restore-tested backup).**
 On the office PC that will run the agent, as the Windows account of the future scheduled task:
@@ -91,9 +97,12 @@ snapshots plus point-in-time recovery on the production database; sync runs logg
 
 ## D. Approvals still required from the owner
 
+0. Staging, now: register an SSH key with the Railway account (`railway ssh keys add`, one-time) so the operator
+   command line can approve the owner's first real device and revoke the staging software device; or, instead, set a
+   fresh one-time `SITE_DEVICE_BOOTSTRAP_CODE` after the software device is revoked (which itself needs the command line).
 1. Gate 1: authorize the administrator to run the two scripts on the live server and return the verification output.
 2. Gate 2: approve creating the production project (cost above) and the production site password rotation.
-3. Gate 3: the Cloudflare hostname, and the second boundary: option A (approved devices, free, recommended) to be built
-   next, or option B (Cloudflare Access pay-as-you-go, about 140 USD per month).
+3. Gate 3: confirm the production host name (devices are enrolled against it) and the device boundary as the security
+   arrangement; Cloudflare is postponed by the owner's decision of 2026-11-26.
 4. Gate 4: the initial transfer of real records, after the backups are verified.
 5. Gate 5: the 06:00 / 12:30 schedule.

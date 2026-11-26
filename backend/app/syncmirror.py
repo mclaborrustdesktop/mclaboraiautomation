@@ -192,7 +192,17 @@ def row_counts(engine) -> dict[str, int]:
 
 # ---------------------------------------------------------------- runs (the website's own store)
 def start_run(mode: str, source: str | None, agent: str | None, allow_mass_delete: bool = False, mirror_rows: int | None = None) -> int:
+    """Opens a run. Refuses (ValueError) a source other than SYNC_EXPECTED_SOURCE, or other than the source of this mirror's
+    earlier successful runs, so that records from two systems (synthetic and real, or two servers) are never mixed."""
+    announced = (source or "").strip()
+    expected = (settings.sync_expected_source or "").strip()
+    if expected and announced.lower() != expected.lower():
+        raise ValueError(f"this website only accepts data from '{expected}' (SYNC_EXPECTED_SOURCE); the agent announced '{announced or '?'}'")
     with _session() as s:
+        prior = s.execute(select(SyncRun.source).where(SyncRun.environment == settings.environment, SyncRun.status == "success", SyncRun.source.is_not(None))
+                          .order_by(SyncRun.id.desc()).limit(1)).scalar()
+        if prior and announced and prior.strip().lower() != announced.lower():
+            raise ValueError(f"this mirror holds data from '{prior}'; a run from '{announced}' is refused so that two systems are never mixed")
         # a run that never finished (agent crashed, link dropped) is marked abandoned when the next one starts
         for old in s.execute(select(SyncRun).where(SyncRun.environment == settings.environment, SyncRun.status == "running")).scalars():
             old.status, old.finished_at, old.error = "abandoned", datetime.utcnow(), "a later run started before this one finished"

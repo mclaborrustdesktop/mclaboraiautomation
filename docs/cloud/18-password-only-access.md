@@ -87,6 +87,28 @@ Settings: `SITE_DEVICE_APPROVAL=true`, `WEBAUTHN_RP_ID=<host>`, `WEBAUTHN_ORIGIN
 
 **Decision taken (owner, 2026-11-26)**: option A, built and tested on staging; Cloudflare postponed.
 
+**Enrolling a real device (owner's PC first).** Open the site in Edge or Chrome, enter the site password, click
+"Register this device": Windows Hello asks for the PC's PIN (or fingerprint / face); the screen then shows a 6-letter
+pairing code and waits. An administrator approves the code (Users page, "Approved devices"), or the operator approves it
+from the command line below; the waiting screen notices within 10 seconds and the device is in. Each later entry is the
+password plus the Windows Hello prompt. Keep **two approved administrator devices** (PC + phone, or PC + security key)
+so the loss of one never locks the company out.
+
+**Recovery and operator approval (no website session needed).** The approval screen needs an administrator who can
+already sign in. When none can (first device, all administrator devices lost or revoked, a staging check that used a
+throw-away software device), the operator runs the backend's own command line INSIDE the backend container, so the
+boundary that protects this path is the hosting account (Railway login with its own second factor), never a shared
+code or a copyable token:
+
+    railway ssh --service backend --environment production -- python -m app.webauth devices list
+    railway ssh --service backend --environment production -- python -m app.webauth devices approve <PAIRING-CODE> <INITIALS> <operator> "<label>"
+    railway ssh --service backend --environment production -- python -m app.webauth devices revoke <ID> <operator>
+
+`railway ssh` requires an SSH key registered with the Railway account (`railway ssh keys add`), which is a one-time
+decision of the account owner. Every command writes to the unlock log (`device-approved-by:cli:<operator>`,
+`device-revoked-by:cli:<operator>`), so the audit trail stays complete. The one-time `SITE_DEVICE_BOOTSTRAP_CODE`
+remains a convenience for a brand-new installation only (it works while no approved device exists, then never again).
+
 Until the chosen boundary exists, `SITE_DEFAULT_USER` names the staff record everyone acts as (staging today); production
 refuses `passcode` mode without a configured identity source.
 

@@ -105,7 +105,7 @@ def real_data_checks(api: str | None, proxy: str | None, expect: str) -> None:
             r = httpx.get(f"{api}/api/auth/me", headers={"X-Auth-Request-Email": "someone@example.com", "X-MS-CLIENT-PRINCIPAL-NAME": "someone@example.com"}, timeout=10)
             check(r.status_code in (401, 403), "backend refuses a forged identity header", f"HTTP {r.status_code}")
             h = httpx.get(f"{api}/api/health", timeout=10).json()
-            check(h.get("environment") == expect and h.get("access_mode") in ("login", "gateway") and h.get("ai_mode") == "heuristic", f"backend reports {expect}, sign-in required, built-in parser", str(h))
+            check(h.get("environment") == expect and h.get("access_mode") in ("login", "gateway", "passcode") and h.get("ai_mode") == "heuristic", f"backend reports {expect}, sign-in required, built-in parser", str(h))
     if proxy:
         with httpx.Client(base_url=proxy, timeout=20, follow_redirects=False, verify=True) as c:
             r = c.get("/api/auth/me")

@@ -273,6 +273,16 @@ def list_devices() -> list[dict]:
         return [as_dict(d) for d in rows]
 
 
+def find_by_code(code: str) -> WebDevice | None:
+    """The device behind a pairing code (operator command line)."""
+    _ensure_table()
+    with _session() as s:
+        d = s.execute(select(WebDevice).where(WebDevice.pairing_code == (code or "").strip().upper())).scalar_one_or_none()
+        if d is not None:
+            s.expunge(d)
+        return d
+
+
 def status_by_code(code: str) -> str | None:
     """pending / approved / revoked for a pairing code (the waiting screen polls this; it reveals nothing else)."""
     _ensure_table()

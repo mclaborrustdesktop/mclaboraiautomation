@@ -83,7 +83,12 @@ def start_run(body: RunIn):
     mirror_rows = sum(max(0, n) for n in syncmirror.row_counts(engine).values())
     if body.allow_mass_delete:
         log.warning("sync run started WITH the deletion guard lifted (allow_mass_delete) by agent %s", body.agent)
-    return {"run_id": syncmirror.start_run(body.mode, body.source, body.agent, allow_mass_delete=body.allow_mass_delete, mirror_rows=mirror_rows)}
+    try:
+        run_id = syncmirror.start_run(body.mode, body.source, body.agent, allow_mass_delete=body.allow_mass_delete, mirror_rows=mirror_rows)
+    except ValueError as exc:
+        log.warning("sync run refused: %s", exc)
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Run refused: {exc}")
+    return {"run_id": run_id}
 
 
 @router.post("/runs/{run_id}/upsert", dependencies=[Depends(require_agent)])

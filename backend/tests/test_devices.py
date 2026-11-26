@@ -52,6 +52,29 @@ def _assert(client, auth, ip="203.0.113.7", bootstrap_code=None, tamper=False):
     return client.post("/api/auth/device/verify", json=body, headers={"X-Forwarded-For": ip})
 
 
+def test_operator_command_line_approves_and_revokes_with_an_audit_record(client, device_mode):
+    """Recovery path: no website session exists (no approved device can sign in), the operator runs the CLI inside the backend."""
+    from app import webauth
+
+    auth = FakeAuthenticator(RP, ORIGIN)
+    code = _register(client, auth)["pairing_code"]
+    assert webauth.main(["x", "devices", "approve", "ZZZZZZ", "ADMIN", "ray"]) == 1          # unknown code: nothing changes
+    assert webauth.main(["x", "devices", "approve", code, "NOBODY", "ray"]) == 1             # unknown staff: nothing changes
+    assert _assert(client, auth).status_code == 403                                           # still pending
+    assert webauth.main(["x", "devices", "approve", code.lower(), "ADMIN", "ray", "owner PC"]) == 0
+    assert webauth.main(["x", "devices", "list"]) == 0
+    r = _assert(client, auth)
+    assert r.status_code == 200 and r.json()["stage"] == "session"
+    tok = {"Authorization": "Bearer " + r.json()["access_token"]}
+    assert client.get("/api/employees", headers=tok).status_code == 200
+    dev = next(d for d in devices.list_devices() if d["label"] == "owner PC")
+    assert dev["approved_by"] == "cli:ray"
+    assert webauth.main(["x", "devices", "revoke", str(dev["id"]), "ray"]) == 0
+    assert client.get("/api/employees", headers=tok).status_code == 401                       # session died with the device
+    notes = [a["note"] for a in sitepass.recent()]
+    assert "device-approved-by:cli:ray" in notes and "device-revoked-by:cli:ray" in notes
+
+
 def test_password_alone_opens_nothing_and_a_new_device_waits_for_approval(client, device_mode):
     auth = FakeAuthenticator(RP, ORIGIN)
     t = _ticket(client)

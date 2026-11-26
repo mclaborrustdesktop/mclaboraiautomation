@@ -383,7 +383,49 @@ def main(argv: list[str]) -> int:
         set_access(staff.OfficeStaffID, role, by="command line", initials=staff.Initials, email=email)
         print(f"{staff.OfficeStaffFullName} ({staff.Initials}): website access = {argv[3]}. Takes effect at once; no restart needed.")
         return 0
-    print("usage: python -m app.webauth set-password INITIALS | site-password | list | access-list | access-set INITIALS admin|user|none")
+    if cmd == "devices" and len(argv) >= 3:
+        # Operator recovery path for the approved-device boundary: runs INSIDE the backend (railway ssh), so it needs the
+        # hosting account, not a website session. Every action is written to the unlock log with the operator's name.
+        from . import devices, sitepass
+
+        sub = argv[2]
+        if sub == "list":
+            rows = devices.list_devices()
+            print(f"{len(rows)} device(s): {devices.approved_count()} approved, limit {settings.site_device_limit}")
+            for d in rows:
+                print(f"  #{d['id']:<4} {d['status']:8} {(d['pairing_code'] or ''):6} staff {str(d['staff_id'] or '-'):<6} {(d['label'] or '')[:40]:40} "
+                      f"registered {str(d['created_at'] or '')[:16]} from {d['created_ip'] or '?'}  last used {str(d['last_used_at'] or 'never')[:16]}")
+            return 0
+        if sub == "approve" and len(argv) >= 6:  # devices approve PAIRING-CODE INITIALS OPERATOR [LABEL...]
+            code, ident, by, label = argv[3].strip().upper(), argv[4], argv[5].strip(), " ".join(argv[6:]).strip()
+            d = devices.find_by_code(code)
+            if d is None or d.status != "pending":
+                print(f"No PENDING device has the pairing code {code}. Nothing was changed.")
+                return 1
+            with SessionLocal() as db:
+                staff = _find_staff(db, ident)
+            if staff is None or not staff.OfficeStaffActive:
+                print(f"No ACTIVE office staff record with initials or e-mail '{ident}'. Nothing was changed.")
+                return 1
+            if not by:
+                print("Give the operator's name (it is written to the audit log).")
+                return 1
+            d = devices.approve(d.id, staff.OfficeStaffID, label or staff.OfficeStaffFullName, f"cli:{by}")
+            sitepass.record("operator-cli", f"device:{d.id}", "command line", True, f"device-approved-by:cli:{by[:14]}")
+            print(f"Device #{d.id} ({code}) approved for {staff.OfficeStaffFullName} ({staff.Initials}) as '{d.label}'. Recorded in the unlock log as cli:{by}.")
+            return 0
+        if sub == "revoke" and len(argv) >= 5:  # devices revoke ID OPERATOR
+            by = argv[4].strip()
+            try:
+                d = devices.revoke(int(argv[3]), f"cli:{by}")
+            except (LookupError, ValueError):
+                print(f"No device #{argv[3]}. Nothing was changed.")
+                return 1
+            sitepass.record("operator-cli", f"device:{d.id}", "command line", True, f"device-revoked-by:cli:{by[:14]}")
+            print(f"Device #{d.id} ('{d.label or ''}') revoked; any open session from it ends at its next request. Recorded as cli:{by}.")
+            return 0
+    print("usage: python -m app.webauth set-password INITIALS | site-password | list | access-list | access-set INITIALS admin|user|none\n"
+          "       python -m app.webauth devices list | devices approve PAIRING-CODE INITIALS OPERATOR [LABEL] | devices revoke ID OPERATOR")
     return 2
 
 

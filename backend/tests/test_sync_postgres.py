@@ -40,7 +40,9 @@ with TestClient(app) as c:
     out["run1"] = {k: v for k, v in rep.items() if k != "per_table"}
     n_emp = rep["per_table"]["tblEmployee"]["source_rows"]
     # an unapproved column is refused by the cloud itself, whatever an agent sends
-    run_id = target.begin_run("incremental", "test")
+    # a run announcing another source than the mirror's is refused (synthetic and real records can never mix)
+    out["foreign_source_refused"] = c.post("/api/sync/runs", headers={"X-Sync-Key": key}, json={"mode": "incremental", "source": "another system", "agent": "t"}).status_code
+    run_id = target.begin_run("incremental", "sqlite (given)")
     r = c.post(f"/api/sync/runs/{run_id}/upsert", headers={"X-Sync-Key": key}, json={"table": "tblEmployee", "rows": [{"EmployeeID": 1, "SSNum": "x"}]})
     out["ssn_refused"] = (r.status_code, r.json()["detail"][:60])
     r = c.post(f"/api/sync/runs/{run_id}/upsert", headers={"X-Sync-Key": key}, json={"table": "tblEmployeeAdvances", "rows": [{"EmployeeAdvanceID": 1}]})
@@ -120,6 +122,7 @@ def test_agent_feeds_the_search_only_website_through_the_api(pg, tmp_path):  # n
     assert out["bootstrap_no_key"] == 401 and out["bootstrap_wrong_key"] == 401 and out["tables"] == 33
     assert out["run1"]["mode"] == "full" and out["run1"]["tables"] == 33 and out["run1"]["deleted"] == 0 and out["run1"]["upserted"] >= 5000
     assert out["ssn_refused"][0] == 422 and "not approved" in out["ssn_refused"][1] and out["table_refused"] == 422 and out["finished_twice"] == 409
+    assert out["foreign_source_refused"] == 409
     assert out["mirror_has_no_sensitive_columns"] and out["login"] == 200 and out["me"] == [True, True, "admin"] and out["site_mode"] == "search-only"
     assert out["employees_total"] and out["record"] == 200 and out["kw_search"] and out["ai_search"] and out["customers"] and out["tracking_board"] == 200 and out["dashboard"] == 200
     assert out["writes"] == [423] * 6 and out["edit_features_hidden"] and out["grant_access"] == 200

@@ -93,6 +93,10 @@ class Settings(BaseSettings):
     # The website warns when the last successful sync is older than this (twice-daily runs: 14 hours).
     sync_stale_hours: int = 14
     sync_source_label: str = "the office McLabor system"
+    # The ONLY source the ingest API accepts runs from, as the agent announces it: "<expected server name>/<database>" for
+    # SQL Server, "sqlite (given)" for a synthetic file. Unset = the mirror still refuses a source different from the one
+    # its earlier successful runs came from. Production sets it to the live server, so synthetic data can never land there.
+    sync_expected_source: str | None = None
 
     # The office SQL Server hosts (names and addresses): never a PostgreSQL host, never a synthetic-data or schema
     # target, never a sync mirror. Kept OUT of the code: OFFICE_HOSTS=name1,addr1,... or one per line in
