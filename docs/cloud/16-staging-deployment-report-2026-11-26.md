@@ -18,7 +18,7 @@ environment `production` (the application runs as **STAGING**: `DATA_SOURCE=stag
 Variables: 21 on the backend (database references `${{Postgres.DATABASE_URL}}`, `SITE_MODE=search-only`,
 `ACCESS_MODE=login`, `WEB_ADMINS=ARI`, seat limit 20, `JWT_SECRET`, `SYNC_API_KEY`, `WEB_BOOTSTRAP_PASSWORD`, CORS,
 logging), 3 on the frontend. Secret values exist only in Railway and in the owner's local folder
-`%LOCALAPPDATA%\MCLabor\staging` on COMP-27; none is in the repository or in this report.
+`%LOCALAPPDATA%\MCLabor\staging` on the development PC; none is in the repository or in this report.
 
 ## 2. Data
 
@@ -26,7 +26,7 @@ Synthetic only. The office sync agent (`app.syncagent`) ran once from this PC ag
 (`app.synthdb`, scale 0.2, every value invented, restricted columns empty) through the website address with the sync
 key: bootstrap created the 33 mirror tables; full run **33 tables, 173,518 rows sent, 0 deleted, 0 warnings, 201
 batches, 30.5 minutes**. The site shows "last successful sync" = 2026-11-26 14:42 UTC, level fresh. Employees 35,435
-(duplicates hidden), customers 21,365, jobs 3,149, weekly tracking 38,445. No connection to SERVER-1; the twice-daily
+(duplicates hidden), customers 21,365, jobs 3,149, weekly tracking 38,445. No connection to the office SQL Server (LIVE-HOST); the twice-daily
 scheduled task is **not** registered.
 
 ## 3. Tests (staging_checks.py against the public address, all PASS)
@@ -72,5 +72,5 @@ scheduled task is **not** registered.
 
 ## 6. Not done, on purpose
 
-No SERVER-1 connection, no real records, no scheduled synchronization, no Cloudflare Access yet, no billing change, no
+No office SQL Server (LIVE-HOST) connection, no real records, no scheduled synchronization, no Cloudflare Access yet, no billing change, no
 additional account, no TCP proxy or public domain on the backend or the database.
