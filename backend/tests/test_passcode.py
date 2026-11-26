@@ -63,6 +63,15 @@ def test_lockout_per_address_and_for_everyone(client, passcode, monkeypatch):
     assert all("nope" not in str(r) and SITE_PW not in str(r) for r in log)         # never the password
 
 
+def test_a_successful_unlock_resets_the_address_counter(client, passcode):
+    for _ in range(2):
+        assert _unlock(client, "nope", ip="198.51.100.20").status_code == 401
+    assert _unlock(client, SITE_PW, ip="198.51.100.20").status_code == 200           # got in: the two slips are forgotten
+    for _ in range(2):
+        assert _unlock(client, "nope", ip="198.51.100.20").status_code == 401
+    assert _unlock(client, SITE_PW, ip="198.51.100.20").status_code == 200           # still only two since the last success, no lock
+
+
 def test_audit_trail_for_administrators(client, passcode):
     _unlock(client, "bad")
     ok = _unlock(client, SITE_PW)
