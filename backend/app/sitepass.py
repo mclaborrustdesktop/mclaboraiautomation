@@ -26,6 +26,23 @@ from .security import verify_password
 from .webauth import AuthBase, _session
 
 MAX_LOCK_MINUTES = 240
+_ready = False
+
+
+def _ensure_table() -> None:
+    """The web store's tables are created when the store is first opened; this module may be imported later than that
+    (the unlock route imports it on first use), so its own table is created here, once per process, if missing."""
+    global _ready
+    if _ready:
+        return
+    from sqlalchemy.exc import IntegrityError, ProgrammingError
+
+    with _session() as s:
+        try:
+            SiteUnlockAttempt.__table__.create(s.get_bind(), checkfirst=True)
+        except (IntegrityError, ProgrammingError):  # another worker created it at the same moment
+            s.rollback()
+    _ready = True
 
 
 class SiteUnlockAttempt(AuthBase):
@@ -45,6 +62,7 @@ def _window_start() -> datetime:
 
 def lock_state(ip: str) -> tuple[bool, int, str]:
     """(locked, retry_after_seconds, reason). Reason is 'address' or 'everyone' when locked."""
+    _ensure_table()
     now = datetime.utcnow()
     since = _window_start()
     with _session() as s:
@@ -69,6 +87,7 @@ def lock_state(ip: str) -> tuple[bool, int, str]:
 
 
 def record(ip: str, identity: str | None, user_agent: str | None, success: bool, note: str) -> None:
+    _ensure_table()
     with _session() as s:
         s.add(SiteUnlockAttempt(ip=(ip or "?")[:64], identity=(identity or None) and identity[:120], user_agent=(user_agent or "")[:200] or None, success=success, note=note[:60]))
         s.commit()
@@ -82,12 +101,14 @@ def check(password: str) -> bool:
 
 
 def recent(limit: int = 100) -> list[dict]:
+    _ensure_table()
     with _session() as s:
         rows = s.execute(select(SiteUnlockAttempt).order_by(SiteUnlockAttempt.id.desc()).limit(limit)).scalars().all()
     return [{"at": r.at.isoformat(timespec="seconds"), "ip": r.ip, "identity": r.identity, "user_agent": r.user_agent, "success": r.success, "note": r.note} for r in rows]
 
 
 def summary() -> dict:
+    _ensure_table()
     day = datetime.utcnow() - timedelta(hours=24)
     with _session() as s:
         total = s.execute(select(func.count()).select_from(SiteUnlockAttempt).where(SiteUnlockAttempt.at >= day)).scalar() or 0
@@ -101,6 +122,7 @@ def summary() -> dict:
 
 def clear() -> None:
     """Tests only."""
+    _ensure_table()
     with _session() as s:
         s.query(SiteUnlockAttempt).delete()
         s.commit()
