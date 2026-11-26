@@ -109,6 +109,8 @@ deploy/vm/azure/CLOUDSHELL.md  staging from Azure Cloud Shell: read-only pre-fli
 docs/cloud/14-staging-setup-walkthrough.md  GitHub, Cloudflare Access, R2, Railway (paid, after approval), synthetic staging: one step at a time with charges
 docs/cloud/15-railway-staging-recovery.md  the Railway trial restriction (exact text, appeal path), what is preserved (volume, variables, domain), recovery order
 docs/cloud/16-staging-deployment-report-2026-11-26.md  the live STAGING on Railway Pro: services, synthetic load, all tests passed, persistence, backups, next steps
+docs/cloud/17-security-handover.md  history clean-up procedure, administrator password hand-over, backup restore, Cloudflare Zero Trust plan (20 users),
+                     bypass prevention, security checklist for the twice-daily synchronization, items needing approval
 tools/repo-check/scan_repo.py  run before every push: lists what the root .gitignore keeps out and scans the rest for secrets and real data
 docs/cloud/13-one-way-sync.md  FIRST RELEASE: office SQL Server -> one-way sync -> Railway PostgreSQL -> search-only website; agent, reconciliation,
                      schedule, security, tests, costs, what remains. tools/sync = the office agent's scripts (DPAPI secrets, Task Scheduler)
