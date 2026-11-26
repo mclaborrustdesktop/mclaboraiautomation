@@ -9,6 +9,8 @@ interface AuthContextValue {
   loading: boolean;
   lookups: Lookups | null;
   login: (username: string, password: string) => Promise<void>;
+  /** passcode mode: enter the site password */
+  unlock: (password: string) => Promise<void>;
   /** true after signing in with a temporary password set by an administrator */
   mustChangePassword: boolean;
   passwordChanged: () => void;
@@ -54,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cancelled) return;
       setAccessMode(mode);
       // "open" (demo) and "gateway" need no token: the server already knows who is asking.
-      if (mode === null || (mode === "login" && !getToken())) {
+      if (mode === null || ((mode === "login" || mode === "passcode") && !getToken())) {
         setLoading(false);
         return;
       }
@@ -85,6 +87,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refreshLookups();
   }, [refreshLookups]);
 
+  const unlock = useCallback(async (password: string) => {
+    const res = await api.unlock(password);
+    setToken(res.access_token);
+    setUser(res.user);
+    setMustChange(false);
+    await refreshLookups();
+  }, [refreshLookups]);
+
   const passwordChanged = useCallback(() => setMustChange(false), []);
 
   const logout = useCallback(() => {
@@ -101,8 +111,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user.Profile || user.features.includes(f);
   }, [user, searchOnly]);
 
-  const value = useMemo(() => ({ user, loading, lookups, login, logout, hasFeature, refreshLookups, mustChangePassword, passwordChanged, accessMode, searchOnly: searchOnly || !!user?.search_only }),
-    [user, loading, lookups, login, logout, hasFeature, refreshLookups, mustChangePassword, passwordChanged, accessMode, searchOnly]);
+  const value = useMemo(() => ({ user, loading, lookups, login, unlock, logout, hasFeature, refreshLookups, mustChangePassword, passwordChanged, accessMode, searchOnly: searchOnly || !!user?.search_only }),
+    [user, loading, lookups, login, unlock, logout, hasFeature, refreshLookups, mustChangePassword, passwordChanged, accessMode, searchOnly]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

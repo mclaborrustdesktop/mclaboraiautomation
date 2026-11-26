@@ -155,6 +155,20 @@ class Settings(BaseSettings):
     # with "must change" set, so the first sign-in ends in choosing a real one; then remove this setting. It never
     # replaces an existing password and never applies to anyone else. 16+ characters, not the demo password.
     web_bootstrap_password: str | None = None
+    # ---- ACCESS_MODE=passcode: one site password instead of a user name + password (docs/cloud/18-password-only-access.md) ----
+    # The password exists only as this PBKDF2 hash (python -m app.webauth site-password prints it from a hidden prompt).
+    # Never the plain password, never in the code, never logged.
+    site_password_hash: str | None = None
+    # A label for the secret in use: "initial" for the set-up password; production refuses to start with it (the owner
+    # must rotate to a unique production secret and label it, e.g. "production-2026-12").
+    site_password_label: str = "initial"
+    # Who the person is behind the site password: the staff record named here (initials or e-mail), unless the request
+    # carries a Cloudflare Access identity (certificate common name or e-mail), which always wins and is audited.
+    site_default_user: str = ""
+    site_session_minutes: int = 480          # an unlock lasts 8 hours, then the password screen returns
+    site_lock_failures: int = 5              # per address, within site_lock_minutes
+    site_lock_minutes: int = 15
+    site_global_lock_failures: int = 50      # from all addresses together: everyone waits site_lock_minutes
     # With real data, administrators grant and remove website access in the website itself (Users page, or
     # `python -m app.webauth access-set`), stored in the web sign-in file - no restart, no redeploy. The lists above
     # are the bootstrap. The company's maximum number of website users (decision 2026-11-23: 20): the website refuses
@@ -396,10 +410,12 @@ class Settings(BaseSettings):
 
     @property
     def access(self) -> str:
-        """'open', 'login' or 'gateway'. Real data can never be 'open', whatever the settings file says."""
+        """'open', 'login', 'passcode' or 'gateway'. Real data can never be 'open', whatever the settings file says."""
         mode = (self.access_mode or "").strip().lower()
+        if mode in ("gateway", "passcode"):
+            return mode
         if self.is_real_data:
-            return "gateway" if mode == "gateway" else "login"
+            return "login"
         return "login" if mode == "login" else "open"
 
     @staticmethod
@@ -481,8 +497,19 @@ class Settings(BaseSettings):
             if not self.db_encrypt:
                 p.append(f"{E}_DB_ENCRYPT must stay true.")
         mode = (self.access_mode or "").strip().lower()
-        if mode not in ("", "login", "gateway"):
-            p.append(f"ACCESS_MODE={mode} is not allowed with real data. Use 'login' or 'gateway'; anonymous access is refused.")
+        if mode not in ("", "login", "gateway", "passcode"):
+            p.append(f"ACCESS_MODE={mode} is not allowed with real data. Use 'login', 'passcode' or 'gateway'; anonymous access is refused.")
+        if mode == "passcode":
+            h = (self.site_password_hash or "").strip()
+            if not h.startswith("pbkdf2$") or h.count("$") != 3:
+                p.append("ACCESS_MODE=passcode needs SITE_PASSWORD_HASH: the PBKDF2 hash printed by `python -m app.webauth site-password` (never the password itself).")
+            cf_identity = (self.gateway_platform or "").strip().lower() == "cloudflare-access" and bool((self.cloudflare_access_team_domain or "").strip()) and bool((self.cloudflare_access_aud or "").strip())
+            if not (self.site_default_user or "").strip() and not cf_identity:
+                p.append("ACCESS_MODE=passcode needs SITE_DEFAULT_USER (the staff record people act as) or a Cloudflare Access identity (GATEWAY_PLATFORM=cloudflare-access with team domain and AUD).")
+            if self.environment == "production" and (self.site_password_label or "").strip().lower() in ("", "initial", "staging", "test", "demo"):
+                p.append("Production needs its own site password: set a new SITE_PASSWORD_HASH and SITE_PASSWORD_LABEL (e.g. production-2026-12). The initial/staging password is refused.")
+            if not 5 <= int(self.site_session_minutes) <= 720:
+                p.append("SITE_SESSION_MINUTES must be between 5 and 720 (12 hours).")
         platform = (self.gateway_platform or "proxy").strip().lower()
         if platform not in ("proxy", "azure-easyauth", "cloudflare-access"):
             p.append(f"GATEWAY_PLATFORM={platform} is not known. Use 'proxy', 'azure-easyauth' or 'cloudflare-access'.")

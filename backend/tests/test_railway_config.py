@@ -36,7 +36,7 @@ def test_env_templates_hold_no_secrets_and_use_private_urls():
         for line in text.splitlines():
             if "=" in line and not line.startswith("#"):
                 key, _, value = line.partition("=")
-                if any(s in key for s in ("SECRET", "PASSWORD", "PASSPHRASE", "KEY_ID", "API_KEY")):
+                if any(s in key for s in ("SECRET", "PASSWORD", "PASSPHRASE", "KEY_ID", "API_KEY")) and not key.endswith("_LABEL"):  # SITE_PASSWORD_LABEL names the secret, it is not one
                     assert value in ("", "<sealed>") or value.startswith("<"), f"{name}: {key} must not carry a value"
         if name.startswith("backend"):
             assert "DATABASE_PRIVATE_URL" in text and "GATEWAY_PLATFORM=cloudflare-access" in text and "GATEWAY_TRUSTED_PROXIES=any" in text

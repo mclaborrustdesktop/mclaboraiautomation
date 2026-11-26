@@ -342,6 +342,19 @@ def main(argv: list[str]) -> int:
         set_password(staff.OfficeStaffID, pw, must_change=False)
         print("Web password saved. The Access password was not touched.")
         return 0
+    if cmd == "site-password":
+        # ACCESS_MODE=passcode: print the PBKDF2 hash of a site password typed at a hidden prompt; paste it into the
+        # hosting service as SITE_PASSWORD_HASH. The password itself is never written anywhere.
+        pw = getpass.getpass("Site password (typing is hidden): ")
+        problem = password_problem(pw, "")
+        if problem:
+            print(problem)
+            return 1
+        if pw != getpass.getpass("Type it again: "):
+            print("The two entries do not match. Nothing was produced.")
+            return 1
+        print("SITE_PASSWORD_HASH=" + hash_password(pw))
+        return 0
     if cmd == "list":
         with _session() as s:
             rows = s.execute(select(WebCredential.staff_id, WebCredential.must_change, WebCredential.last_login_at, WebCredential.locked_until)).all()
@@ -370,7 +383,7 @@ def main(argv: list[str]) -> int:
         set_access(staff.OfficeStaffID, role, by="command line", initials=staff.Initials, email=email)
         print(f"{staff.OfficeStaffFullName} ({staff.Initials}): website access = {argv[3]}. Takes effect at once; no restart needed.")
         return 0
-    print("usage: python -m app.webauth set-password INITIALS | list | access-list | access-set INITIALS admin|user|none")
+    print("usage: python -m app.webauth set-password INITIALS | site-password | list | access-list | access-set INITIALS admin|user|none")
     return 2
 
 

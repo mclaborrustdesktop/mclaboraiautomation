@@ -8,7 +8,7 @@ export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000
 const TOKEN_KEY = "mclabor.token";
 
 /** How people get in: "open" = demo, no sign-in; "login" = sign-in page; "gateway" = the company gateway signs people in. */
-export type AccessMode = "open" | "login" | "gateway";
+export type AccessMode = "open" | "login" | "gateway" | "passcode";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public detail?: unknown) {
@@ -92,6 +92,8 @@ const json = (body: unknown) => JSON.stringify(body);
 export const api = {
   // auth
   login: (username: string, password: string) => request<{ access_token: string; user: User; must_change_password?: boolean }>("/api/auth/login", { method: "POST", body: json({ username, password }) }),
+  /** passcode mode: the password screen (one site password, no user name) */
+  unlock: (password: string) => request<{ access_token: string; user: User }>("/api/auth/unlock", { method: "POST", body: json({ password }) }),
   me: () => request<User>("/api/auth/me"),
   changePassword: (current_password: string, new_password: string) => request<void>("/api/auth/change-password", { method: "POST", body: json({ current_password, new_password }) }),
   setUserPassword: (id: number, password: string, must_change = true) => request<void>(`/api/users/${id}/password`, { method: "POST", body: json({ password, must_change }) }),

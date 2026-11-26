@@ -111,6 +111,8 @@ docs/cloud/15-railway-staging-recovery.md  the Railway trial restriction (exact 
 docs/cloud/16-staging-deployment-report-2026-11-26.md  the live STAGING on Railway Pro: services, synthetic load, all tests passed, persistence, backups, next steps
 docs/cloud/17-security-handover.md  history clean-up procedure, administrator password hand-over, backup restore, Cloudflare Zero Trust plan (20 users),
                      bypass prevention, security checklist for the twice-daily synchronization, items needing approval
+docs/cloud/18-password-only-access.md  ACCESS_MODE=passcode: one site password (hashed secret), lockouts, sessions, audit trail; the per-employee certificate boundary
+docs/cloud/19-production-setup-plan.md  gates to real records: live-server account, production project, Cloudflare, initial import, 06:00/12:30 schedule, approvals
 tools/repo-check/scan_repo.py  run before every push: lists what the root .gitignore keeps out and scans the rest for secrets and real data
 docs/cloud/13-one-way-sync.md  FIRST RELEASE: office SQL Server -> one-way sync -> Railway PostgreSQL -> search-only website; agent, reconciliation,
                      schedule, security, tests, costs, what remains. tools/sync = the office agent's scripts (DPAPI secrets, Task Scheduler)

@@ -44,6 +44,7 @@ def system_status(_: m.OfficeStaff = Depends(require_admin)):
         "production_writes": "enabled" if settings.sql_writes_allowed else "disabled",
         "site_mode": "search-only" if settings.search_only else "full",
         "sync": {**syncmirror.status(), "ingest_enabled": settings.sync_enabled},
+        "site_unlock": __import__("app.sitepass", fromlist=["summary"]).summary() if settings.access == "passcode" else None,
         "access": {
             "mode": settings.access,
             "platform": settings.gateway_platform if settings.access == "gateway" else None,

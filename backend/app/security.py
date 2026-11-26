@@ -161,6 +161,80 @@ def _gateway_user(request: Request, db: Session) -> OfficeStaff:
     return user
 
 
+def client_address(request: Request) -> str:
+    """The visitor's address for the unlock counters. A hosted front end (deploy/railway) forwards the browser's request
+    over the private network with X-Forwarded-For as the platform's edge set it; only that proxy can reach this API."""
+    xff = request.headers.get("X-Forwarded-For", "")
+    last = xff.split(",")[-1].strip() if xff else ""  # the edge appends the real address last; a visitor cannot forge that entry
+    return last or ((request.client.host if request.client else "") or "?")
+
+
+def gateway_identity(request: Request) -> tuple[str | None, str | None]:
+    """(email, common_name) from a verified Cloudflare Access token on this request, if the platform is configured and the
+    token is present. (None, None) otherwise. Used by the passcode mode to know WHO unlocked, for the audit trail and the
+    access lists, without a user name field."""
+    if (settings.gateway_platform or "").strip().lower() != "cloudflare-access":
+        return None, None
+    if not ((settings.cloudflare_access_team_domain or "").strip() and (settings.cloudflare_access_aud or "").strip()):
+        return None, None
+    token = request.headers.get("Cf-Access-Jwt-Assertion") or request.cookies.get("CF_Authorization")
+    if not token:
+        return None, None
+    from . import cloudflare_access
+
+    try:
+        claims = cloudflare_access.verify(token, require_email=False)
+    except cloudflare_access.AccessTokenInvalid:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "This site is only available through the company gateway.")
+    return (claims.get("email") or None), (claims.get("common_name") or None)
+
+
+def resolve_site_identity(request: Request, db: Session) -> tuple[OfficeStaff, str]:
+    """Passcode mode: the staff record a successful unlock acts as, and the identity string for the audit trail.
+    A Cloudflare Access identity (certificate common name or e-mail) always wins; otherwise SITE_DEFAULT_USER."""
+    email, cn = gateway_identity(request)
+    ident = (email or cn or "").strip().lower()
+    label = f"cloudflare:{ident}" if ident else f"default:{(settings.site_default_user or '').strip().lower()}"
+    if not ident:
+        ident = (settings.site_default_user or "").strip().lower()
+    user = None
+    if ident:
+        user = db.execute(select(OfficeStaff).where(
+            (func.lower(OfficeStaff.Initials) == ident) | (func.lower(OfficeStaff.OfficeStaffEmail) == ident))).scalars().first()
+    if user is None or not user.OfficeStaffActive:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Your access identity is not an active MC Labor office staff record. Ask an administrator.")
+    require_web_access(user)
+    return user, label
+
+
+def create_site_token(staff: OfficeStaff, identity: str) -> str:
+    now = datetime.now(timezone.utc)
+    payload = {"sub": str(staff.OfficeStaffID), "name": staff.OfficeStaffFullName, "initials": staff.Initials, "admin": is_web_admin(staff),
+               "mode": "site", "who": identity[:120], "env": settings.environment, "iat": now, "exp": now + timedelta(minutes=settings.site_session_minutes)}
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def _site_user(request: Request, creds: HTTPAuthorizationCredentials | None, db: Session) -> OfficeStaff:
+    """Passcode mode: only a token issued by /api/auth/unlock (mode 'site') in this environment is accepted."""
+    if creds is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
+    try:
+        payload = jwt.decode(creds.credentials, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    except jwt.PyJWTError:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Your session has ended. Enter the password again.")
+    if payload.get("mode") != "site" or payload.get("env", "demo") != settings.environment:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Your session has ended. Enter the password again.")
+    email, cn = gateway_identity(request)  # if the gateway names someone, the session must belong to that person
+    ident = (email or cn or "").strip().lower()
+    if ident and payload.get("who") != f"cloudflare:{ident}":
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Your session has ended. Enter the password again.")
+    user = db.get(OfficeStaff, int(payload["sub"]))
+    if user is None or not user.OfficeStaffActive:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User inactive")
+    require_web_access(user)
+    return user
+
+
 def get_current_user(
     request: Request,
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
@@ -168,6 +242,8 @@ def get_current_user(
 ) -> OfficeStaff:
     if settings.access == "gateway":
         return _gateway_user(request, db)  # web sign-in tokens are not accepted in this mode
+    if settings.access == "passcode":
+        return _site_user(request, creds, db)  # only unlock tokens are accepted in this mode
     if settings.access == "open":
         # Demo without sign-in: everyone is the demo administrator. A token left in the browser from an
         # earlier sign-in (possibly expired, or from another environment) is simply ignored.

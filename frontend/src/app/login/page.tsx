@@ -24,7 +24,7 @@ function LoginForm() {
   // There is a sign-in form only in "login" mode. In the demo and behind the company gateway this page
   // sends people straight to the site.
   useEffect(() => {
-    if (!loading && (user || (accessMode && accessMode !== "login"))) router.replace(next);
+    if (!loading && (user || (accessMode && accessMode !== "login" && accessMode !== "passcode"))) router.replace(next);
   }, [loading, user, router, next, accessMode]);
 
   useEffect(() => {
@@ -75,6 +75,55 @@ function LoginForm() {
   );
 }
 
+/** ACCESS_MODE=passcode: one site password, no user name. The server records every attempt and locks an address after
+ * repeated failures; the message it returns is shown as is (it never says more than "incorrect" or "try again later"). */
+function PasscodeForm() {
+  const { unlock, user, loading, accessMode } = useAuth();
+  const router = useRouter();
+  const params = useSearchParams();
+  const next = params.get("next") || "/";
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!loading && user) router.replace(next);
+  }, [loading, user, router, next]);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      await unlock(password);
+      setPassword("");
+      router.replace(next);
+    } catch (err) {
+      setError(describeError(err));
+      setPassword("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (accessMode !== "passcode") return null;
+
+  return (
+    <form onSubmit={submit} className="space-y-4" aria-label="Access password">
+      <div>
+        <label className="label" htmlFor="site-password">Access password</label>
+        <input id="site-password" type="password" className="input h-11 text-base" value={password} onChange={(e) => setPassword(e.target.value)}
+          autoComplete="current-password" autoFocus required />
+      </div>
+      <ErrorBox message={error} />
+      <button className="btn-primary h-11 w-full text-base" disabled={busy || !password}>
+        {busy ? "Checking…" : "Enter"}
+      </button>
+      <p className="text-center text-xs text-slate-500">Authorized MC Labor Sources staff only. Every entry is recorded, and access ends automatically after a period of inactivity.</p>
+    </form>
+  );
+}
+
 const HIGHLIGHTS = [
   { icon: Sparkles, title: "AI search", text: "Find the right workers, customers and jobs by just describing them." },
   { icon: Users, title: "One place for every record", text: "Employees, customers, jobs and weekly tracking, all connected." },
@@ -83,20 +132,21 @@ const HIGHLIGHTS = [
 
 export default function LoginPage() {
   const { accessMode } = useAuth();
-  if (accessMode !== "login") {
+  if (accessMode !== "login" && accessMode !== "passcode") {
     // Demo / company gateway: nothing to sign in to. LoginForm only performs the redirect to the site.
     return <Suspense fallback={null}><LoginForm /></Suspense>;
   }
+  const passcode = accessMode === "passcode";
   return (
     <div className="grid min-h-screen bg-white lg:grid-cols-2">
       <div className="flex flex-col px-6 py-8 sm:px-12">
         <img src="/brand/mclabor-logo.png" alt="MC Labor Sources Inc." className="h-8 w-auto self-start" />
         <div className="flex flex-1 items-center">
           <div className="mx-auto w-full max-w-sm py-10">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Sign in to your workspace</h1>
-            <p className="mt-1.5 mb-8 text-sm text-slate-500">Office portal for MC Labor Sources staff.</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{passcode ? "MC Labor Search" : "Sign in to your workspace"}</h1>
+            <p className="mt-1.5 mb-8 text-sm text-slate-500">{passcode ? "Enter the access password to open the search dashboard." : "Office portal for MC Labor Sources staff."}</p>
             <Suspense fallback={null}>
-              <LoginForm />
+              {passcode ? <PasscodeForm /> : <LoginForm />}
             </Suspense>
           </div>
         </div>

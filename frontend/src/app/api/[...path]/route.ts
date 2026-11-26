@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const FORWARD = ["authorization", "content-type", "accept", "cookie", "cf-access-jwt-assertion", "cf-access-authenticated-user-email", "x-request-id", "if-none-match",
-  "x-sync-key"];  // the office sync agent's key: the agent reaches the backend only through this proxy
+  "x-sync-key",  // the office sync agent's key: the agent reaches the backend only through this proxy
+  "x-forwarded-for"];  // the visitor's address as the platform's edge recorded it: the password screen counts attempts per address
 const RETURN = ["content-type", "x-request-id", "retry-after", "cache-control", "etag"];
 
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }): Promise<Response> {

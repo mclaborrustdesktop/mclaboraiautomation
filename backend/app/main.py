@@ -87,7 +87,7 @@ for r in (auth, users, lookups, employees, customers, projects, tracking, search
 
 
 # These never write to the business database (sign-in and web passwords use the local web sign-in store).
-_READ_ONLY_ALLOWED_POSTS = ("/api/auth/login", "/api/auth/change-password", "/password", "/api/search", "/check-duplicates", "/web-access")
+_READ_ONLY_ALLOWED_POSTS = ("/api/auth/login", "/api/auth/unlock", "/api/auth/change-password", "/password", "/api/search", "/check-duplicates", "/web-access")
 
 
 def _is_business_write(request: Request) -> bool:
