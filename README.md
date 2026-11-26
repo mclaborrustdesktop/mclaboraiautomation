@@ -108,6 +108,7 @@ docs/cloud/11-vm-size-for-20-users.md  measured 20-user load on 4 and on 2 logic
 deploy/vm/azure/CLOUDSHELL.md  staging from Azure Cloud Shell: read-only pre-flight, approval stop, provisioning, set-up, tests, cleanup
 docs/cloud/14-staging-setup-walkthrough.md  GitHub, Cloudflare Access, R2, Railway (paid, after approval), synthetic staging: one step at a time with charges
 docs/cloud/15-railway-staging-recovery.md  the Railway trial restriction (exact text, appeal path), what is preserved (volume, variables, domain), recovery order
+docs/cloud/16-staging-deployment-report-2026-11-26.md  the live STAGING on Railway Pro: services, synthetic load, all tests passed, persistence, backups, next steps
 tools/repo-check/scan_repo.py  run before every push: lists what the root .gitignore keeps out and scans the rest for secrets and real data
 docs/cloud/13-one-way-sync.md  FIRST RELEASE: office SQL Server -> one-way sync -> Railway PostgreSQL -> search-only website; agent, reconciliation,
                      schedule, security, tests, costs, what remains. tools/sync = the office agent's scripts (DPAPI secrets, Task Scheduler)
