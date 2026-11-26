@@ -4,15 +4,18 @@
 -- What it does: creates ONE login that can only read approved columns of the McLabor database.
 --   33 tables, 288 columns, read access only. It cannot change, add or remove anything,
 --   cannot run stored procedures, and cannot see any other table or database.
+--   STEP 3b adds explicit DENYs so that no later GRANT or role membership can ever give it a write right.
 -- What it does not do: it creates no tables, changes no data, and changes no server setting.
 --   This server already allows SQL logins (mixed mode), so no restart is needed.
 -- Never readable by this login: tblEmployee: BankAccountActionID, BankAccountNumber, BankAccountTypeID, BankName, BankRoutingNumber, Citizenship, Dependents, EmCountryOfBirth, EmDOB, EmI9Notes, EmRaceID, EmSex, EmW4Notes, I9Complete, SSNum, USCitizen; tblOfficeStaff: OfficeStaffPassword
 -- Safe to run twice: every step checks whether it was already done.
+-- Afterwards, run verify-readonly-login.sql (read-only) to see the effective permissions of the new login.
 
 -- STEP 1 - the login. Replace the password placeholder with a long password (16+ characters) typed here by you.
 --          Do not e-mail it or paste it into a chat. You will type it once more when the web app is configured.
 USE [master];
--- SAFETY: this copy of the script is for the STAGING database on DEV-PC only. It stops on any other server.
+-- SAFETY: this copy of the script is for the restored copy only. It stops on any other server.
+-- DEV-PC is a placeholder: replace it with the computer name of the restored copy before running (the office notes have it).
 IF CAST(SERVERPROPERTY('ServerName') AS nvarchar(128)) <> N'DEV-PC\SQLEXPRESS'
 BEGIN
     RAISERROR('Wrong server. This script only runs on DEV-PC\SQLEXPRESS (the restored copy). Nothing was created.', 16, 1);
@@ -30,6 +33,8 @@ BEGIN
         + N', CHECK_POLICY = ON, CHECK_EXPIRATION = OFF, DEFAULT_DATABASE = [McLabor]';
     EXEC (@sql);
 END
+-- The login may not list or enter other databases (its default database is McLabor; CONNECT to others is never granted).
+DENY VIEW ANY DATABASE TO [mclabor_web_read];
 GO
 -- (Alternative instead of STEP 1, no password to manage: a dedicated local Windows account that runs the web app.
 --  CREATE LOGIN [DEV-PC\mclabor_web] FROM WINDOWS WITH DEFAULT_DATABASE = [McLabor];
@@ -82,10 +87,21 @@ GRANT SELECT ON dbo.[tblPullDownYearsInTrade] ([PullDownYearsInTrade], [PullDown
 GRANT SELECT ON dbo.[tblTracking] ([AssignWeek], [AssignYear], [AssignmentTimestamp], [AssignmentUserName], [BillRate], [BillRateOT], [CalcProfitMargin], [CustomerID], [DirVerified], [DirectionsSentEmail], [DirectionsSentText], [EmGrossPayroll], [EmployeeID], [FriHours], [Grade], [HoursNote], [InvoiceAmount], [MonHours], [MonStatusFlagID], [OTPayRate], [OvertimeHours], [PayRate], [PayrollCoOnSiteID], [PayrollInfoSent], [Placeholder], [ProjectID], [RegularHours], [SatHours], [SunHours], [ThuHours], [TotalHours], [TrackingID], [TueHours], [WCC], [WedHours], [WeekEndingDate]) TO [mclabor_web_readonly];
 GO
 
+-- STEP 3b - explicit refusals. A DENY wins over any GRANT, including rights inherited later through a role, so this
+--           role can never insert, update, delete, merge, alter, drop, create or execute anything in this database.
+DENY INSERT, UPDATE, DELETE, EXECUTE, ALTER, REFERENCES, CREATE TABLE, CREATE VIEW, CREATE PROCEDURE, CREATE FUNCTION, CREATE SCHEMA, CREATE TYPE, ALTER ANY SCHEMA, ALTER ANY USER, ALTER ANY ROLE, TAKE OWNERSHIP, BACKUP DATABASE, BACKUP LOG ON DATABASE::[McLabor] TO [mclabor_web_readonly];
+-- The sensitive columns are refused by name, so that even a future table-wide GRANT SELECT could not expose them:
+DENY SELECT ON dbo.[tblEmployee] ([BankAccountActionID], [BankAccountNumber], [BankAccountTypeID], [BankName], [BankRoutingNumber], [Citizenship], [Dependents], [EmCountryOfBirth], [EmDOB], [EmI9Notes], [EmRaceID], [EmSex], [EmW4Notes], [I9Complete], [SSNum], [USCitizen]) TO [mclabor_web_readonly];
+DENY SELECT ON dbo.[tblOfficeStaff] ([OfficeStaffPassword]) TO [mclabor_web_readonly];
+GO
+
 -- STEP 4 - check the result (read-only queries).
--- Expect 288 column permissions on 33 tables, all SELECT:
-SELECT COUNT(*) AS column_permissions, COUNT(DISTINCT major_id) AS tables, MIN(permission_name) AS permission, MAX(permission_name) AS permission_check
-FROM sys.database_permissions WHERE grantee_principal_id = DATABASE_PRINCIPAL_ID(N'mclabor_web_readonly') AND class = 1;
+-- Expect 288 SELECT column permissions on 33 tables:
+SELECT COUNT(*) AS select_column_permissions, COUNT(DISTINCT major_id) AS tables
+FROM sys.database_permissions WHERE grantee_principal_id = DATABASE_PRINCIPAL_ID(N'mclabor_web_readonly') AND class = 1 AND state = 'G' AND permission_name = 'SELECT';
+-- Expect 18 database-level DENYs and 17 column DENYs:
+SELECT SUM(CASE WHEN class = 0 THEN 1 ELSE 0 END) AS database_denies, SUM(CASE WHEN class = 1 THEN 1 ELSE 0 END) AS column_denies
+FROM sys.database_permissions WHERE grantee_principal_id = DATABASE_PRINCIPAL_ID(N'mclabor_web_readonly') AND state = 'D';
 -- Expect 0 rows (the user must not be in any built-in role):
 SELECT r.name AS unexpected_role FROM sys.database_role_members rm JOIN sys.database_principals r ON r.principal_id = rm.role_principal_id
 WHERE rm.member_principal_id = DATABASE_PRINCIPAL_ID(N'mclabor_web_read') AND r.name <> N'mclabor_web_readonly';

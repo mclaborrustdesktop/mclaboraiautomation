@@ -72,9 +72,35 @@ def test_required_schema_excludes_sensitive_columns():
         assert col in req["sensitive_columns"]["tblEmployee"]
     assert "OfficeStaffPassword" not in req["tables"]["tblOfficeStaff"]
     assert "YearsInTradeID" in emp and "WillTravel" in req["tables"]["tblEmployeeB"]
-    grants = (TOOL / "proposed-grants.sql").read_text(encoding="utf-8")
-    assert "SSNum]" not in grants and "BankAccountNumber]" not in grants and "[EmDOB]" not in grants and "[OfficeStaffPassword]" not in grants
-    assert "INSERT" not in grants.split("USE [McLabor]")[1].upper().replace("NO INSERT", "")
+    for name in ("proposed-grants.sql", "proposed-grants-production.sql"):
+        grants = (TOOL / name).read_text(encoding="utf-8")
+        body = grants.split("USE [McLabor]")[1]
+        statements = []
+        for chunk in body.split(";"):
+            code = " ".join(line.strip() for line in chunk.splitlines() if line.strip() and not line.strip().startswith("--") and line.strip().upper() != "GO").strip()
+            if code:
+                statements.append(code)
+        grant_lines = [s for s in statements if s.upper().startswith("GRANT")]
+        deny_lines = [s for s in statements if s.upper().startswith("DENY")]
+        assert len(grant_lines) == 33 and all(s.upper().startswith("GRANT SELECT ON DBO.") for s in grant_lines)
+        for col in ("SSNum", "BankAccountNumber", "EmDOB", "OfficeStaffPassword"):
+            assert not any(f"[{col}]" in s for s in grant_lines)          # never granted
+            assert any(f"[{col}]" in s and "DENY SELECT" in s for s in deny_lines)  # explicitly refused
+        db_deny = next(s for s in deny_lines if "ON DATABASE::[McLabor]" in s)
+        for perm in ("INSERT", "UPDATE", "DELETE", "EXECUTE", "ALTER", "CREATE TABLE", "TAKE OWNERSHIP"):
+            assert perm in db_deny
+        assert "CONTROL" not in db_deny                                  # denying CONTROL would deny SELECT too
+        # no write verb anywhere except inside the DENY statements and comments
+        for s in statements:
+            if not s.upper().startswith("DENY"):
+                keywords = __import__("re").sub(r"\[[^\]]*\]", "", s).upper()  # column names such as OfficeStaffCanDelete are identifiers, not verbs
+                assert not __import__("re").search(r"\b(INSERT|UPDATE|DELETE|MERGE|DROP|TRUNCATE)\b", keywords), s[:80]
+        assert "DENY VIEW ANY DATABASE TO [mclabor_web_read]" in grants
+    verify = (TOOL / "verify-readonly-login.sql").read_text(encoding="utf-8")
+    assert verify.count("EXECUTE AS LOGIN") == 1 and verify.rstrip().endswith("REVERT;")
+    for s in verify.split(";"):
+        first = " ".join(line for line in s.strip().splitlines() if not line.strip().startswith("--")).strip().upper()
+        assert not first.startswith(("INSERT", "UPDATE", "DELETE", "MERGE", "DROP", "ALTER", "CREATE", "TRUNCATE", "EXEC ", "BEGIN TRAN", "GRANT", "DENY")), first[:60]
 
 
 def test_passwords_in_config_file_are_refused(tmp_path, monkeypatch):

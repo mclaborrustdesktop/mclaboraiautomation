@@ -127,7 +127,9 @@ deploy/cloud/        container images (backend/Dockerfile, frontend/Dockerfile),
 backend/app/observability.py  JSON logs, request ids, access log; /api/ready readiness
 tools/staging/       read-only scripts for the restored copy; run-readonly.ps1 runs them while the website stays in DEMO;
                      loadtest-staging.ps1 (35/60-user load test on a second backend); manage-web-access.ps1 (WEB_ADMINS / WEB_USERS)
-tools/prod-check/    connection check, proposed scripts (never run without approval: grants, certificate, indexes, full-text), reports
+tools/prod-check/    connection check, proposed scripts (never run without approval: grants, certificate, indexes, full-text), reports;
+                     verify-readonly-login.sql = read-only effective-permission report of the sync login (docs/production/17)
+docs/production/17-readonly-login-verification.md  the strictly read-only sync account: column grants + DENY layer, rehearsal on the copy, live-server procedure, risks
 tools/gateway-check.ps1  read-only readiness check for gateway access
 deploy/gateway/      reverse-proxy and sign-in templates for gateway access (not active)
 ```

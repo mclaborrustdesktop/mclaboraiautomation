@@ -319,6 +319,40 @@ def run(cfg: dict[str, str], driver: str, rep: Report, required: dict) -> None:
         else:
             rep.ok("Sensitive columns (SSN, bank details, date of birth, work-eligibility, staff passwords) are NOT readable")
 
+        server_roles = ("sysadmin", "securityadmin", "serveradmin", "setupadmin", "processadmin", "diskadmin", "dbcreator", "bulkadmin")
+        flags = q("SELECT " + ", ".join(f"IS_SRVROLEMEMBER('{r}')" for r in server_roles))[0]
+        in_roles = [r for r, f in zip(server_roles, flags) if f == 1]
+        if in_roles:
+            rep.fail("The login is in server role(s) " + ", ".join(in_roles) + ": far too much. Do not use it.")
+        else:
+            rep.ok("Not a member of any fixed server role")
+        routines = q("SELECT COUNT(*) FROM sys.objects o JOIN sys.schemas s ON s.schema_id = o.schema_id WHERE o.type IN ('P', 'PC', 'FN', 'IF', 'TF', 'FS', 'FT', 'X') "
+                     "AND HAS_PERMS_BY_NAME(QUOTENAME(s.name) + '.' + QUOTENAME(o.name), 'OBJECT', 'EXECUTE') = 1")[0][0]
+        if routines:
+            rep.fail(f"The login can execute {routines} stored procedure(s)/function(s); it must execute none.")
+        else:
+            rep.ok("Cannot execute any stored procedure or function")
+        other_writable = q("SELECT COUNT(*) FROM sys.objects o JOIN sys.schemas s ON s.schema_id = o.schema_id WHERE o.type IN ('U', 'V') AND ("
+                           "HAS_PERMS_BY_NAME(QUOTENAME(s.name) + '.' + QUOTENAME(o.name), 'OBJECT', 'INSERT') = 1 OR HAS_PERMS_BY_NAME(QUOTENAME(s.name) + '.' + QUOTENAME(o.name), 'OBJECT', 'UPDATE') = 1 "
+                           "OR HAS_PERMS_BY_NAME(QUOTENAME(s.name) + '.' + QUOTENAME(o.name), 'OBJECT', 'DELETE') = 1 OR HAS_PERMS_BY_NAME(QUOTENAME(s.name) + '.' + QUOTENAME(o.name), 'OBJECT', 'ALTER') = 1)")[0][0]
+        if other_writable:
+            rep.fail(f"The login can modify or alter {other_writable} table(s)/view(s) in the database (any table, not only the ones the app uses).")
+        else:
+            rep.ok("No INSERT/UPDATE/DELETE/ALTER permission on any table or view in the whole database")
+        readable_cols = q("SELECT COUNT(*) FROM sys.columns c JOIN sys.objects o ON o.object_id = c.object_id WHERE o.name IN (" + ", ".join("?" for _ in tables) + ") "
+                          "AND HAS_PERMS_BY_NAME(? + QUOTENAME(o.name), 'OBJECT', 'SELECT', c.name, 'COLUMN') = 1", *tables, f"{schema}.")[0][0]
+        expected_cols = sum(len(c) for c in tables.values())
+        if readable_cols == expected_cols:
+            rep.ok(f"Readable columns on the approved tables: {readable_cols} (exactly the approved list)")
+        elif readable_cols < expected_cols:
+            rep.fail(f"Only {readable_cols} of the {expected_cols} approved columns are readable; the sync would be incomplete.")
+        else:
+            rep.warn(f"{readable_cols} columns are readable on the approved tables; the approved list has {expected_cols}. Access is wider than approved.")
+        view_any = q("SELECT HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW ANY DATABASE')")[0][0]
+        if view_any == 1:
+            rep.warn("The login can list every database on the server (VIEW ANY DATABASE). Harmless but wider than needed; the grant script denies it.")
+        else:
+            rep.ok("Cannot list other databases on the server")
         visible_tables = q("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ?", schema)[0][0]
         if visible_tables > len(tables):
             rep.warn(f"The login can see {visible_tables} tables/views; the app needs {len(tables)}. Access is wider than necessary.")
