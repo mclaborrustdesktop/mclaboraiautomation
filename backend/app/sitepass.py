@@ -7,8 +7,10 @@ counters):
 
 * per address: after SITE_LOCK_FAILURES failed attempts within SITE_LOCK_MINUTES the address is refused for
   SITE_LOCK_MINUTES (doubling with every further failure, up to 4 hours);
-* overall: after SITE_GLOBAL_LOCK_FAILURES failures from any addresses within the window, every address is refused
-  for SITE_LOCK_MINUTES (a distributed guess attack hits this);
+* overall: after SITE_GLOBAL_LOCK_FAILURES failures from any addresses within the window the site goes into
+  "pressure": attempts are refused from addresses that have NOT unlocked successfully in the last 30 days, while the
+  company's own addresses (which have) keep working. An attacker therefore cannot lock the company out by guessing
+  from many addresses; a new office device during an attack waits SITE_LOCK_MINUTES. Never a full lock;
 * every attempt is recorded with the address, the identity the gateway named (if any), the client software and the
   outcome; administrators read the trail at GET /api/auth/unlock-log and the system status page summarises it.
 
@@ -81,9 +83,17 @@ def lock_state(ip: str) -> tuple[bool, int, str]:
             return True, int((until - now).total_seconds()) + 1, "address"
     if all_failures >= settings.site_global_lock_failures and last_any_fail is not None:
         until = last_any_fail + timedelta(minutes=settings.site_lock_minutes)
-        if until > now:
+        if until > now and not _known_good(ip):
             return True, int((until - now).total_seconds()) + 1, "everyone"
     return False, 0, ""
+
+
+def _known_good(ip: str) -> bool:
+    """Has this address unlocked successfully in the last 30 days? Such addresses (the office, staff homes) are exempt from
+    the site-wide pressure that a guessing attack from elsewhere causes; they still have their own per-address lock."""
+    with _session() as s:
+        last_ok = s.execute(select(func.max(SiteUnlockAttempt.at)).where(SiteUnlockAttempt.ip == ip, SiteUnlockAttempt.success.is_(True))).scalar()
+    return last_ok is not None and last_ok >= datetime.utcnow() - timedelta(days=30)
 
 
 def record(ip: str, identity: str | None, user_agent: str | None, success: bool, note: str) -> None:
@@ -116,7 +126,7 @@ def summary() -> dict:
         addresses = s.execute(select(func.count(func.distinct(SiteUnlockAttempt.ip))).where(SiteUnlockAttempt.at >= day)).scalar() or 0
         last_ok = s.execute(select(func.max(SiteUnlockAttempt.at)).where(SiteUnlockAttempt.success.is_(True))).scalar()
     return {"attempts_24h": total, "failed_24h": failed, "addresses_24h": addresses, "last_success_at": last_ok.isoformat(timespec="seconds") if last_ok else None,
-            "lock_rule": f"{settings.site_lock_failures} failures = {settings.site_lock_minutes} min per address (doubling), {settings.site_global_lock_failures} failures = {settings.site_lock_minutes} min for everyone",
+            "lock_rule": f"{settings.site_lock_failures} failures = {settings.site_lock_minutes} min per address (doubling); {settings.site_global_lock_failures} failures site-wide = {settings.site_lock_minutes} min for addresses never seen succeeding (known addresses keep working)",
             "session_minutes": settings.site_session_minutes, "password_label": settings.site_password_label}
 
 

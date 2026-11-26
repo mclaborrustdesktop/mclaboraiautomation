@@ -59,11 +59,41 @@ developer), backups (a production snapshot before and after the import; restore 
 synchronization (two consecutive incremental runs with their counts and durations), security (anonymous 401 on
 every endpoint, forged tokens refused, writes 423, backend and database without public address, repository scan clean).
 
+## C2. Prepared on 2026-11-26 (local, private, nothing created in the cloud)
+
+- The production secret for the password screen was generated locally (20 random characters) and is stored DPAPI-encrypted for the owner's Windows
+  account in `%LOCALAPPDATA%\MCLabor\production\site-password-production.dpapi`; its hash, the label `production-2026-11`,
+  a new JWT secret and a new sync key in `railway-production-secrets.json` in the same folder. The initial staging
+  password is refused by production by design (label rule in the backend).
+- Administrator package for the live server: `%LOCALAPPDATA%\MCLabor\production\live-server-readonly-login-package.zip`
+  (grant script with its 5 placeholder lines, verification script, settings template, procedure 18 and report 17).
+- Site-wide lockout redesigned so that an attacker cannot lock the company out (docs/cloud/18, section 1).
+
+## C3. Actual additional monthly cost (list prices read 2026-11-26)
+
+| Item | USD / month |
+|---|---|
+| Railway Pro minimum (already subscribed), includes 20 USD of usage | 20.00 |
+| Staging usage at the measured sizes (can be stopped between test days) | about 11 |
+| Production usage: backend + frontend + PostgreSQL with a 1 GB volume, daily/weekly snapshots, point-in-time recovery storage | about 12 |
+| **Railway total** (usage 23 against 20 included) | **about 23**, i.e. about 3 above the Pro minimum; about 20 if staging is stopped |
+| Cloudflare Free: DNS, proxy, WAF rate-limiting rule, office IP rule | 0 |
+| Cloudflare Access with mTLS or an identity provider (option B only, 20 users) | about 140 (not recommended) |
+| Domain name, if the company has none in Cloudflare | about 0.85 (10 per year) |
+
+**Final security architecture (recommended)**: Cloudflare Free proxy on `search.<domain>` with a rate-limit rule on
+`/api/auth/unlock` and (optional) the office IP rule -> Railway frontend (the only public service; the Railway-generated
+domain deleted) -> private network -> backend and PostgreSQL (no public address). Entrance: the single site password
+(hashed, rotated per environment) + the approved-device boundary (option A) = something you know + something you have,
+per employee, audited per device. Data: SQL Server stays the source of truth; the read-only login (288 columns, DENY
+layer) feeds the mirror one way, twice a day; the website refuses every write (423). Backups: daily and weekly
+snapshots plus point-in-time recovery on the production database; sync runs logged on both sides.
+
 ## D. Approvals still required from the owner
 
 1. Gate 1: authorize the administrator to run the two scripts on the live server and return the verification output.
 2. Gate 2: approve creating the production project (cost above) and the production site password rotation.
-3. Gate 3: the Cloudflare hostname and the certificate boundary (who issues the 20 certificates: the owner with the
-   provided procedure, or the client's IT).
+3. Gate 3: the Cloudflare hostname, and the second boundary: option A (approved devices, free, recommended) to be built
+   next, or option B (Cloudflare Access pay-as-you-go, about 140 USD per month).
 4. Gate 4: the initial transfer of real records, after the backups are verified.
 5. Gate 5: the 06:00 / 12:30 schedule.

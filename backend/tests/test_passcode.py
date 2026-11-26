@@ -55,7 +55,9 @@ def test_lockout_per_address_and_for_everyone(client, passcode, monkeypatch):
     for ip in ("198.51.100.3", "198.51.100.4", "198.51.100.5"):
         _unlock(client, "nope", ip=ip)
     everyone = _unlock(client, SITE_PW, ip="198.51.100.9")
-    assert everyone.status_code == 429                                              # distributed guessing locks the site briefly
+    assert everyone.status_code == 429                                              # an address never seen succeeding waits during a distributed attack
+    office = _unlock(client, SITE_PW, ip="198.51.100.2")
+    assert office.status_code == 200                                                # an address that unlocked before keeps working: nobody can lock the company out
     log = sitepass.recent(50)
     assert any(r["note"] == "locked:everyone" for r in log) and any(r["note"] == "locked:address" for r in log)
     assert all("nope" not in str(r) and SITE_PW not in str(r) for r in log)         # never the password
