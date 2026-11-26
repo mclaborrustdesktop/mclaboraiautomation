@@ -82,6 +82,58 @@ USE [master];  DENY VIEW ANY DATABASE TO [mclabor_web_read];
 | Server-level: `CONNECT SQL` to the instance from the office LAN | the login has no server role, no VIEW ANY DATABASE, no IMPERSONATE | restrict the SQL port to the office LAN in the server's firewall (already the case for the live server per docs/production/15) |
 | Human error: an administrator runs the staging-copy script on the live server or vice versa | both scripts stop unless `SERVERPROPERTY('ServerName')` matches their own target | none |
 
+## 6. Results on the restored copy after the DENY layer (2026-11-26, authorized by the owner)
+
+Applied to the copy by this PC's Windows account, server-name guarded, statements taken verbatim from the generated
+script: 18 database-level DENYs, 17 column DENYs; the 288 column grants untouched; business rows untouched
+(tblEmployee count before and after: 178,993).
+
+**Effective-permission report (`verify-readonly-login.sql`, run as the administrator, impersonating the login)**
+
+| # | Check | Result |
+|---|---|---|
+| 2 | fixed server roles | all 0 |
+| 3 | database roles | `mclabor_web_readonly` only |
+| 4 | database permissions | `CONNECT` + the two `VIEW ANY COLUMN ... KEY DEFINITION` defaults (no data) |
+| 5 | server permissions | `CONNECT SQL` only |
+| 6 | INSERT / UPDATE / DELETE / ALTER / REFERENCES / CONTROL on any table or view | none |
+| 7 | executable routines (the 7 diagram procedures included) | **0** |
+| 8 | readable approved columns | **288** |
+| 9 | sensitive columns readable | all 17 = 0 |
+| 10 | readable unapproved tables | none |
+| 11 | visible databases | master, McLabor, tempdb |
+
+MERGE, DROP, TRUNCATE and BULK INSERT need INSERT/UPDATE/DELETE, ALTER or server rights, all of which the report shows
+as absent; no write statement was executed to prove it, the server's own permission functions were asked instead.
+
+**Connection check as the login (`check_readonly.py`)**: 15 OK lines, 0 problems, 0 warnings, READY. Compared with
+the first rehearsal (section 2), the two findings are gone: executable routines 7 -> 0, VIEW ANY DATABASE -> denied.
+
+**Agent in read-only validation mode (dry run, sends nothing, restricted login, the copy's full real size)**
+
+| | |
+|---|---|
+| Tables / rows read | 33 / 1,209,951 (tblEmployee 178,993; tblCustomer 106,828; tblCustomerContacts 187,636; tblTracking 192,225; tblOfficeStaffActivity 234,466) |
+| Duration | 39.7 s end to end (1,235 batches compared, 0 warnings, exit 0) |
+| Load on the SQL Server during the run (8 logical processors) | CPU average 1.1 % of the machine, peak 2.9 % (0.23 of one core); disk queue average 0.66, peak 2.6; SQL Server memory unchanged at 1.45 GB |
+| What the login read | exactly the 288 approved columns (the agent names columns explicitly; a refused column would have failed the statement) |
+
+**Effect on the Microsoft Access application.** The agent reads with ordinary `READ COMMITTED` SELECTs in pages of
+5,000 rows ordered by the key (keyset paging, no OFFSET), each page a separate short statement with its own
+transaction rolled back immediately. Shared locks are therefore held per page for milliseconds; an Access user saving
+a record waits at most for one page read to pass, and the agent never blocks a writer for the length of a table. On
+the copy (`READ_COMMITTED_SNAPSHOT` off, as on the live server presumably) no blocking was observed and the whole run
+is under a minute at the live data size. Scheduled at 06:00 and 12:30 the two runs add well under one CPU-minute a day.
+Optional, not required: the administrator may turn on `READ_COMMITTED_SNAPSHOT` on the live database so readers never
+wait for writers at all; it is a one-time setting change that needs a moment without connections, so it is a
+separate decision.
+
+**Remaining privilege exceptions on the copy**: only the two `VIEW ANY COLUMN ENCRYPTION KEY DEFINITION` /
+`VIEW ANY COLUMN MASTER KEY DEFINITION` rights that SQL Server grants to `public`; they reveal Always Encrypted key
+metadata, which this database does not use, and no data. Accepted. Everything else is exactly the approved set.
+
+**Live server procedure**: `18-live-server-readonly-login-procedure.md`.
+
 ## 5. Approval needed before the first synchronization
 
 1. Owner: apply STEP 3b and the server DENY to the **restored copy** (section 2), then rerun the check to see READY.

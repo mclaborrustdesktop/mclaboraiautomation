@@ -130,6 +130,7 @@ tools/staging/       read-only scripts for the restored copy; run-readonly.ps1 r
 tools/prod-check/    connection check, proposed scripts (never run without approval: grants, certificate, indexes, full-text), reports;
                      verify-readonly-login.sql = read-only effective-permission report of the sync login (docs/production/17)
 docs/production/17-readonly-login-verification.md  the strictly read-only sync account: column grants + DENY layer, rehearsal on the copy, live-server procedure, risks
+docs/production/18-live-server-readonly-login-procedure.md  the administrator's step-by-step for the live server (edit placeholders, run, verify, office-PC check, dry run)
 tools/gateway-check.ps1  read-only readiness check for gateway access
 deploy/gateway/      reverse-proxy and sign-in templates for gateway access (not active)
 ```
