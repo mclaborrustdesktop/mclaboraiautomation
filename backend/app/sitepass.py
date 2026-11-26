@@ -69,7 +69,7 @@ def lock_state(ip: str) -> tuple[bool, int, str]:
     since = _window_start()
     with _session() as s:
         # failures count only since this address last unlocked successfully: a person who gets in is not haunted by old slips
-        last_ok = s.execute(select(func.max(SiteUnlockAttempt.at)).where(SiteUnlockAttempt.ip == ip, SiteUnlockAttempt.success.is_(True), SiteUnlockAttempt.note == "ok")).scalar()
+        last_ok = s.execute(select(func.max(SiteUnlockAttempt.at)).where(SiteUnlockAttempt.ip == ip, SiteUnlockAttempt.success.is_(True), SiteUnlockAttempt.note.in_(("ok", "password-ok")))).scalar()
         floor = max(since - timedelta(minutes=MAX_LOCK_MINUTES), last_ok) if last_ok else since - timedelta(minutes=MAX_LOCK_MINUTES)
         ip_failures = s.execute(select(func.count()).select_from(SiteUnlockAttempt).where(
             SiteUnlockAttempt.ip == ip, SiteUnlockAttempt.success.is_(False), SiteUnlockAttempt.at > floor)).scalar() or 0
