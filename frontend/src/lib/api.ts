@@ -1,8 +1,5 @@
 import { buildQuery } from "./format";
-import type {
-  AccessSummary, AISearchInfo, AuditEntry, Customer, DuplicateMatch, CustomerNote, CustomerSummary, DashboardStats, Employee, EmployeeNote, EmployeeSummary, Entity,
-  Facet, Filters, Lookups, Page, Project, SyncStatus, SystemStatus, ProjectSummary, Tracking, TrackingSummary, User,
-} from "./types";
+import type { AccessSummary, AISearchInfo, AuditEntry, Customer, DuplicateMatch, CustomerNote, CustomerSummary, DashboardStats, Employee, EmployeeNote, EmployeeSummary, Entity, Facet, Filters, Lookups, Page, Project, SyncStatus, SystemStatus, ProjectSummary, Tracking, TrackingSummary, User, UnlockResult, WebDevice } from "./types";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const TOKEN_KEY = "mclabor.token";
@@ -93,7 +90,16 @@ export const api = {
   // auth
   login: (username: string, password: string) => request<{ access_token: string; user: User; must_change_password?: boolean }>("/api/auth/login", { method: "POST", body: json({ username, password }) }),
   /** passcode mode: the password screen (one site password, no user name) */
-  unlock: (password: string) => request<{ access_token: string; user: User }>("/api/auth/unlock", { method: "POST", body: json({ password }) }),
+  unlock: (password: string) => request<UnlockResult>("/api/auth/unlock", { method: "POST", body: json({ password }) }),
+  /** approved devices (WebAuthn) behind the password screen */
+  deviceOptions: (ticket: string) => request<{ options: string; challenge: string }>("/api/auth/device/options", { method: "POST", body: json({ ticket }) }),
+  deviceVerify: (body: { ticket: string; challenge: string; credential: unknown; bootstrap_code?: string }) => request<UnlockResult>("/api/auth/device/verify", { method: "POST", body: json(body) }),
+  deviceRegisterOptions: (ticket: string) => request<{ options: string; challenge: string }>("/api/auth/device/register/options", { method: "POST", body: json({ ticket }) }),
+  deviceRegisterVerify: (body: { ticket: string; challenge: string; credential: unknown }) => request<{ stage: "pending"; pairing_code: string; device_id: number }>("/api/auth/device/register/verify", { method: "POST", body: json(body) }),
+  deviceStatus: (code: string) => request<{ status: string }>(`/api/auth/device/status?code=${encodeURIComponent(code)}`),
+  devices: () => request<{ devices: WebDevice[]; limit: number; approved: number; enabled: boolean }>("/api/auth/devices"),
+  approveDevice: (id: number, staff: string, label: string) => request<WebDevice>(`/api/auth/devices/${id}/approve`, { method: "POST", body: json({ staff, label }) }),
+  revokeDevice: (id: number) => request<WebDevice>(`/api/auth/devices/${id}/revoke`, { method: "POST" }),
   me: () => request<User>("/api/auth/me"),
   changePassword: (current_password: string, new_password: string) => request<void>("/api/auth/change-password", { method: "POST", body: json({ current_password, new_password }) }),
   setUserPassword: (id: number, password: string, must_change = true) => request<void>(`/api/users/${id}/password`, { method: "POST", body: json({ password, must_change }) }),

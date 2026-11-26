@@ -8,6 +8,7 @@ import { Badge, ErrorBox, Modal, PageHeader, SuccessBox } from "@/components/ui"
 import { api, describeError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { AccessSummary, User } from "@/lib/types";
+import { DevicesPanel } from "@/components/DevicesPanel";
 
 const ROLE_PRESETS: Record<string, string[]> = {
   "Office Manager": ["employees.view", "employees.edit", "customers.view", "customers.edit", "projects.view", "projects.edit", "tracking.view", "tracking.edit", "payroll.view", "reports.view", "ai.search"],
@@ -90,6 +91,7 @@ function UserAdmin() {
         <select className="input !w-auto" value={active} onChange={(e) => setActive(e.target.value)} aria-label="Active filter"><option value="true">Active only</option><option value="false">Inactive only</option><option value="">All users</option></select>
       </div>
       <div className="mb-4 space-y-2"><ErrorBox message={error} /><SuccessBox message={message} /></div>
+      <DevicesPanel staff={rows} />
       <DataTable columns={columns} rows={rows} rowKey={(u) => u.OfficeStaffID} loading={loading} onRowClick={realData ? undefined : (u) => setEditing(u)} />
       {editing && <UserEditor user={editing === "new" ? null : editing} isSelf={editing !== "new" && editing.OfficeStaffID === me?.OfficeStaffID} onClose={() => setEditing(null)} onSaved={async (msg) => { setEditing(null); setMessage(msg); await load(); }} />}
     </>

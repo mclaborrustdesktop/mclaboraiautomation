@@ -4,6 +4,7 @@ import { ShieldCheck, Sparkles, Users } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { api, describeError } from "@/lib/api";
+import { createCredential, getAssertion, webauthnSupported } from "@/lib/webauthn";
 import { useAuth } from "@/lib/auth";
 import { EnvironmentBadge } from "@/components/EnvironmentBadge";
 import { ErrorBox } from "@/components/ui";
@@ -76,28 +77,85 @@ function LoginForm() {
 }
 
 /** ACCESS_MODE=passcode: one site password, no user name. The server records every attempt and locks an address after
- * repeated failures; the message it returns is shown as is (it never says more than "incorrect" or "try again later"). */
+ * repeated failures; the message it returns is shown as is (it never says more than "incorrect" or "try again later").
+ * With approved devices on, the correct password is followed by the device step: the browser signs a server challenge
+ * with the key its authenticator holds for this site; an unknown device registers and waits for an administrator. */
 function PasscodeForm() {
-  const { unlock, user, loading, accessMode } = useAuth();
+  const { unlock, setSession, user, loading, accessMode } = useAuth();
   const router = useRouter();
   const params = useSearchParams();
   const next = params.get("next") || "/";
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [ticket, setTicket] = useState<string | null>(null);
+  const [pairing, setPairing] = useState<string | null>(null);
+  const [pairingStatus, setPairingStatus] = useState<string>("pending");
+  const [bootstrap, setBootstrap] = useState("");
+  const [showBootstrap, setShowBootstrap] = useState(false);
 
   useEffect(() => {
     if (!loading && user) router.replace(next);
   }, [loading, user, router, next]);
+
+  // the waiting screen asks every 10 s whether the administrator approved this device
+  useEffect(() => {
+    if (!pairing || pairingStatus !== "pending") return;
+    const id = window.setInterval(async () => {
+      try {
+        const s = (await api.deviceStatus(pairing)).status;
+        if (s !== "pending") setPairingStatus(s);
+      } catch { /* keep waiting */ }
+    }, 10000);
+    return () => window.clearInterval(id);
+  }, [pairing, pairingStatus]);
+
+  /** sign the server's challenge with this device; register it first when it holds no credential for this site */
+  const deviceStep = async (t: string, bootstrapCode?: string) => {
+    if (!webauthnSupported()) throw new Error("This browser cannot hold a device credential. Use a current Chrome, Edge, Safari or Firefox on a device with Windows Hello, Touch ID or a security key.");
+    const o = await api.deviceOptions(t);
+    let assertion: unknown;
+    try {
+      assertion = await getAssertion(o.options);
+    } catch {
+      // no credential on this device for this site: create one and wait for approval
+      const ro = await api.deviceRegisterOptions(t);
+      const created = await createCredential(ro.options);
+      const reg = await api.deviceRegisterVerify({ ticket: t, challenge: ro.challenge, credential: created });
+      setPairing(reg.pairing_code);
+      setPairingStatus("pending");
+      return;
+    }
+    try {
+      const res = await api.deviceVerify({ ticket: t, challenge: o.challenge, credential: assertion, bootstrap_code: bootstrapCode || undefined });
+      if (res.stage === "session") {
+        await setSession(res);
+        router.replace(next);
+      }
+    } catch (err) {
+      const d = (err as { detail?: { detail?: { code?: string; pairing_code?: string; message?: string } } }).detail?.detail;
+      if (d && typeof d === "object" && d.code === "pending" && d.pairing_code) {
+        setPairing(d.pairing_code);
+        setPairingStatus("pending");
+        return;
+      }
+      throw err;
+    }
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      await unlock(password);
+      const res = await unlock(password);
       setPassword("");
-      router.replace(next);
+      if (res.stage === "session") {
+        router.replace(next);
+      } else {
+        setTicket(res.ticket);
+        await deviceStep(res.ticket);
+      }
     } catch (err) {
       setError(describeError(err));
       setPassword("");
@@ -106,7 +164,50 @@ function PasscodeForm() {
     }
   };
 
+  /** after the administrator approved the device (or with the one-time bootstrap code): a fresh password, then the device */
+  const retry = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await unlock(password);
+      setPassword("");
+      if (res.stage === "session") router.replace(next);
+      else { setTicket(res.ticket); await deviceStep(res.ticket, bootstrap || undefined); }
+    } catch (err) {
+      setError(describeError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (accessMode !== "passcode") return null;
+
+  if (pairing) {
+    return (
+      <form onSubmit={retry} className="space-y-4" aria-label="Device approval">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="font-medium">{pairingStatus === "approved" ? "This device is approved." : pairingStatus === "revoked" ? "Access from this device was revoked." : "This device is waiting for an administrator's approval."}</div>
+          <div className="mt-1">Pairing code: <span className="font-mono text-base font-semibold tracking-widest">{pairing}</span></div>
+          {pairingStatus === "pending" && <div className="mt-1 text-xs">Give this code to an administrator. The page checks automatically; once approved, enter the password again.</div>}
+        </div>
+        <div>
+          <label className="label" htmlFor="site-password-2">Access password</label>
+          <input id="site-password-2" type="password" className="input h-11 text-base" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+        </div>
+        {showBootstrap ? (
+          <div>
+            <label className="label" htmlFor="bootstrap">Administrator bootstrap code (first device only)</label>
+            <input id="bootstrap" className="input h-11" value={bootstrap} onChange={(e) => setBootstrap(e.target.value)} autoComplete="off" />
+          </div>
+        ) : (
+          <button type="button" className="text-xs text-slate-500 underline" onClick={() => setShowBootstrap(true)}>I have the administrator bootstrap code</button>
+        )}
+        <ErrorBox message={error} />
+        <button className="btn-primary h-11 w-full text-base" disabled={busy || !password || pairingStatus === "revoked"}>{busy ? "Checking…" : "Continue"}</button>
+      </form>
+    );
+  }
 
   return (
     <form onSubmit={submit} className="space-y-4" aria-label="Access password">
@@ -117,7 +218,7 @@ function PasscodeForm() {
       </div>
       <ErrorBox message={error} />
       <button className="btn-primary h-11 w-full text-base" disabled={busy || !password}>
-        {busy ? "Checking…" : "Enter"}
+        {busy ? (ticket ? "Checking this device…" : "Checking…") : "Enter"}
       </button>
       <p className="text-center text-xs text-slate-500">Authorized MC Labor Sources staff only. Every entry is recorded, and access ends automatically after a period of inactivity.</p>
     </form>

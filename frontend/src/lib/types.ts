@@ -368,3 +368,27 @@ export interface SystemStatus {
   production_writes: string;
   warnings: string[];
 }
+
+/** an approved-device record (the second boundary behind the site password) */
+export interface WebDevice {
+  id: number;
+  status: "pending" | "approved" | "revoked";
+  pairing_code: string | null;
+  label: string | null;
+  staff_id: number | null;
+  created_at: string | null;
+  created_ip: string | null;
+  user_agent: string | null;
+  approved_at: string | null;
+  approved_by: string | null;
+  revoked_at: string | null;
+  revoked_by: string | null;
+  last_used_at: string | null;
+  last_ip: string | null;
+  uses: number;
+  backed_up: boolean | null;
+}
+
+export type UnlockResult =
+  | { stage: "session"; access_token: string; user: User; must_change_password?: boolean }
+  | { stage: "device"; ticket: string; rp_id: string };

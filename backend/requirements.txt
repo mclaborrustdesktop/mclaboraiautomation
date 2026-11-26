@@ -9,6 +9,7 @@ anthropic>=0.50
 Faker>=25
 pytest>=8
 httpx>=0.27
+webauthn>=3.0,<4    # approved devices: WebAuthn credentials bound to the device's authenticator (app/devices.py)
 
 # Production SQL Server adapter (needs Microsoft 'ODBC Driver 18 for SQL Server' on the host)
 pyodbc>=5.1

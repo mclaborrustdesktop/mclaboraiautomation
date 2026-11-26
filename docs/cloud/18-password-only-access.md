@@ -41,20 +41,51 @@ meant for *Service Auth* policies (machines), not for naming people. So that des
 | D. Office IP allow-list (Cloudflare WAF rule, Free) + the password | no (everyone behind the office address looks the same; remote staff excluded) | 0 | no | useful as an extra layer, not as the boundary |
 | E. Passkeys (WebAuthn) per employee, built in | yes, strongest | 0 | no | possible later; changes the single-field screen into "password, then your device's passkey" |
 
-**Option A, how it works.** The password screen stays exactly as it is. After a correct password, the browser presents
-a device key (a random 256-bit value the website gave it on first visit and stores locally; the server keeps only its
-hash). An unknown device is not let in: the screen shows "This device is waiting for approval" with a short pairing
-code, the attempt is logged, and nothing is readable. An administrator opens the Users page, sees the pending device
-(code, time, address, browser), types the employee's name and approves it; from then on that device is that employee
-for every unlock, every search and the audit trail. Limits: 20 approved devices (the seat limit), one or two per
-employee; an administrator revokes a device in one click (lost phone, leaver). A device key is bound to the browser,
-cannot be guessed (256 bits) and is never typed, so a stolen password alone opens nothing from an unknown device.
+**Option A, built (2026-11-26): cryptographically bound devices.** A copyable browser token was rejected as the device
+identity. Instead each device holds a **WebAuthn credential**: a key pair created inside the device's own
+authenticator (Windows Hello with the TPM, Touch ID / Face ID, Android, or a USB security key). The private key is
+non-exportable: it cannot be copied out of the browser or the operating system, so copying cookies, local storage or
+the whole browser profile to another machine gives nothing. The website stores only the public key.
 
-What it costs: nothing. What it needs: one more table in the sign-in store, one administrator page, two endpoints,
-about one working session, and no change to the search pages. Cloudflare Free stays in front for the proxy, the
-WAF rate-limiting rule on the password endpoint and the office IP rule (option D as an extra layer, if wanted).
+Every entry is: the site password, then the device signs a fresh server challenge (valid 3 minutes, bound to the
+visitor's address and to a 5-minute ticket that only a correct password yields). The server verifies the signature
+with the stored public key, checks the sign counter and the origin, and issues a session **bound to that device**
+(revoking the device ends the session at the next request).
 
-**Decision needed from the owner**: proceed with option A (recommended), or pay for option B.
+- Unknown device: it registers itself (the authenticator creates the key pair; the user confirms with Windows Hello or
+  the device PIN) and the screen shows a **pairing code** and "waiting for an administrator's approval". Nothing is
+  readable in that state.
+- An administrator opens the Users page, sees the pending device (code, time, address, browser), chooses the employee
+  and a label, and approves it. Or rejects it. Approved devices can be revoked in one click, and a revoked device
+  cannot be re-approved (the employee registers again, which is a new key).
+- Limits: `SITE_DEVICE_LIMIT` (default 40 = 20 employees with up to two devices).
+- First device ever: the owner enters the one-time `SITE_DEVICE_BOOTSTRAP_CODE` (a sealed variable) on the waiting
+  screen; it approves that single device as `SITE_DEFAULT_USER` while no approved device exists, and never again.
+- Audit: the unlock log records `password-ok`, `device-registered`, `device-pending`, `device-approved-by:<admin>`,
+  `device-revoked-by:<admin>`, `device-bad-signature`, `device-unknown`, and every successful entry as
+  `device:<id>:<label>` with the address and the browser. Each employee is therefore individually identified by the
+  device(s) approved in their name, without any e-mail.
+
+Implementation: `backend/app/devices.py` (py_webauthn), the `/api/auth/device/*` and `/api/auth/devices*` routes in
+`routers/auth.py`, `frontend/src/lib/webauthn.ts`, the device step in the sign-in page, `components/DevicesPanel.tsx`
+on the Users page; tests `backend/tests/test_devices.py` with a software authenticator that produces real signatures.
+
+**Limitations to know**
+- Credentials are bound to the website's host name (`WEBAUTHN_RP_ID`). When the site moves from the Railway address
+  to `search.<domain>`, every device registers again (one approval each). Set the final host before rolling devices out.
+- The device needs a platform authenticator: Windows 10/11 with Windows Hello (PIN at least), macOS/iOS with Touch ID
+  or Face ID, Android 9+, or a security key. Office PCs without Windows Hello set up are prompted to set a PIN once.
+- A device is the browser's authenticator, not the PC: Chrome and Edge on the same Windows PC share Windows Hello
+  (one device), Firefox on the same PC is another registration.
+- The approved-device check runs on every request (one small query); the session itself still expires after
+  `SITE_SESSION_MINUTES`.
+- Automated verification: the software authenticator in the tests exercises the exact server code path; the browser
+  prompt itself (Windows Hello dialog) is verified by hand on staging.
+
+Settings: `SITE_DEVICE_APPROVAL=true`, `WEBAUTHN_RP_ID=<host>`, `WEBAUTHN_ORIGIN=https://<host>`, `SITE_DEVICE_LIMIT`,
+`SITE_DEVICE_BOOTSTRAP_CODE` (one-time, sealed, then deleted).
+
+**Decision taken (owner, 2026-11-26)**: option A, built and tested on staging; Cloudflare postponed.
 
 Until the chosen boundary exists, `SITE_DEFAULT_USER` names the staff record everyone acts as (staging today); production
 refuses `passcode` mode without a configured identity source.

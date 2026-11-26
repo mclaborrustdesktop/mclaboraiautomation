@@ -207,11 +207,22 @@ def resolve_site_identity(request: Request, db: Session) -> tuple[OfficeStaff, s
     return user, label
 
 
-def create_site_token(staff: OfficeStaff, identity: str) -> str:
+def create_site_token(staff: OfficeStaff, identity: str, device_id: int | None = None) -> str:
     now = datetime.now(timezone.utc)
     payload = {"sub": str(staff.OfficeStaffID), "name": staff.OfficeStaffFullName, "initials": staff.Initials, "admin": is_web_admin(staff),
                "mode": "site", "who": identity[:120], "env": settings.environment, "iat": now, "exp": now + timedelta(minutes=settings.site_session_minutes)}
+    if device_id is not None:
+        payload["dev"] = int(device_id)
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def staff_by_ident(db: Session, ident: str) -> OfficeStaff | None:
+    """An active staff record by initials or e-mail (case-insensitive), or None."""
+    ident = (ident or "").strip().lower()
+    if not ident:
+        return None
+    user = db.execute(select(OfficeStaff).where((func.lower(OfficeStaff.Initials) == ident) | (func.lower(OfficeStaff.OfficeStaffEmail) == ident))).scalars().first()
+    return user if user is not None and user.OfficeStaffActive else None
 
 
 def _site_user(request: Request, creds: HTTPAuthorizationCredentials | None, db: Session) -> OfficeStaff:
@@ -228,6 +239,13 @@ def _site_user(request: Request, creds: HTTPAuthorizationCredentials | None, db:
     ident = (email or cn or "").strip().lower()
     if ident and payload.get("who") != f"cloudflare:{ident}":
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Your session has ended. Enter the password again.")
+    if settings.site_device_approval:
+        # the session must have been issued to an approved device, and that device must still be approved (revocation is immediate)
+        from . import devices
+
+        dev = payload.get("dev")
+        if not dev or not devices.is_approved(int(dev)):
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "This device is no longer approved. Enter the password again.")
     user = db.get(OfficeStaff, int(payload["sub"]))
     if user is None or not user.OfficeStaffActive:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "User inactive")

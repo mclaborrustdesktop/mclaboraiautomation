@@ -96,6 +96,8 @@ def _is_business_write(request: Request) -> bool:
     path = request.url.path
     if path.startswith("/api/sync/"):
         return False  # the office agent's one-way feed into the mirror (its own key; refused unless SYNC_API_KEY is set)
+    if path.startswith("/api/auth/"):
+        return False  # sign-in, the password screen and device approvals use the web sign-in store, never the business database
     return not path.endswith(_READ_ONLY_ALLOWED_POSTS)
 
 

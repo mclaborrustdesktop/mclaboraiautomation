@@ -169,6 +169,13 @@ class Settings(BaseSettings):
     site_lock_failures: int = 5              # per address, within site_lock_minutes
     site_lock_minutes: int = 15
     site_global_lock_failures: int = 50      # from all addresses together: everyone waits site_lock_minutes
+    # ---- Approved devices (docs/cloud/18 section 2): the password AND a signature from the device's own authenticator ----
+    site_device_approval: bool = False       # SITE_DEVICE_APPROVAL=true turns the boundary on (passcode mode only)
+    webauthn_rp_id: str | None = None        # the website's host name, e.g. search.example.com (credentials are bound to it)
+    webauthn_origin: str | None = None       # https://search.example.com
+    site_device_limit: int = 40              # approved + pending devices (20 employees x 2 devices)
+    # One-time, sealed: approves the FIRST device ever as SITE_DEFAULT_USER while no approved device exists; then delete it.
+    site_device_bootstrap_code: str | None = None
     # With real data, administrators grant and remove website access in the website itself (Users page, or
     # `python -m app.webauth access-set`), stored in the web sign-in file - no restart, no redeploy. The lists above
     # are the bootstrap. The company's maximum number of website users (decision 2026-11-23: 20): the website refuses
@@ -510,6 +517,14 @@ class Settings(BaseSettings):
                 p.append("Production needs its own site password: set a new SITE_PASSWORD_HASH and SITE_PASSWORD_LABEL (e.g. production-2026-12). The initial/staging password is refused.")
             if not 5 <= int(self.site_session_minutes) <= 720:
                 p.append("SITE_SESSION_MINUTES must be between 5 and 720 (12 hours).")
+            if self.site_device_approval:
+                rp, org = (self.webauthn_rp_id or "").strip(), (self.webauthn_origin or "").strip()
+                if not rp or not org.startswith("https://") or rp not in org:
+                    p.append("SITE_DEVICE_APPROVAL=true needs WEBAUTHN_RP_ID (the website's host name) and WEBAUTHN_ORIGIN (https://<that host>).")
+                if self.site_device_bootstrap_code and len(self.site_device_bootstrap_code.strip()) < 16:
+                    p.append("SITE_DEVICE_BOOTSTRAP_CODE must be 16 or more characters (or unset).")
+        elif self.site_device_approval:
+            p.append("SITE_DEVICE_APPROVAL=true only applies with ACCESS_MODE=passcode.")
         platform = (self.gateway_platform or "proxy").strip().lower()
         if platform not in ("proxy", "azure-easyauth", "cloudflare-access"):
             p.append(f"GATEWAY_PLATFORM={platform} is not known. Use 'proxy', 'azure-easyauth' or 'cloudflare-access'.")

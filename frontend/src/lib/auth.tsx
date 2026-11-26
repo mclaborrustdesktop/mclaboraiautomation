@@ -2,15 +2,17 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, getToken, setToken, type AccessMode } from "./api";
-import type { Lookups, User } from "./types";
+import type { Lookups, UnlockResult, User } from "./types";
 
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
   lookups: Lookups | null;
   login: (username: string, password: string) => Promise<void>;
-  /** passcode mode: enter the site password */
-  unlock: (password: string) => Promise<void>;
+  /** passcode mode: enter the site password; the answer is a session, or a ticket for the device step */
+  unlock: (password: string) => Promise<UnlockResult>;
+  /** passcode mode with approved devices: apply the session the device step returned */
+  setSession: (res: Extract<UnlockResult, { stage: "session" }>) => Promise<void>;
   /** true after signing in with a temporary password set by an administrator */
   mustChangePassword: boolean;
   passwordChanged: () => void;
@@ -87,13 +89,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await refreshLookups();
   }, [refreshLookups]);
 
-  const unlock = useCallback(async (password: string) => {
-    const res = await api.unlock(password);
+  const setSession = useCallback(async (res: Extract<UnlockResult, { stage: "session" }>) => {
     setToken(res.access_token);
     setUser(res.user);
     setMustChange(false);
     await refreshLookups();
   }, [refreshLookups]);
+
+  const unlock = useCallback(async (password: string) => {
+    const res = await api.unlock(password);
+    if (res.stage === "session") await setSession(res);
+    return res;
+  }, [setSession]);
 
   const passwordChanged = useCallback(() => setMustChange(false), []);
 
@@ -111,8 +118,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user.Profile || user.features.includes(f);
   }, [user, searchOnly]);
 
-  const value = useMemo(() => ({ user, loading, lookups, login, unlock, logout, hasFeature, refreshLookups, mustChangePassword, passwordChanged, accessMode, searchOnly: searchOnly || !!user?.search_only }),
-    [user, loading, lookups, login, unlock, logout, hasFeature, refreshLookups, mustChangePassword, passwordChanged, accessMode, searchOnly]);
+  const value = useMemo(() => ({ user, loading, lookups, login, unlock, setSession, logout, hasFeature, refreshLookups, mustChangePassword, passwordChanged, accessMode, searchOnly: searchOnly || !!user?.search_only }),
+    [user, loading, lookups, login, unlock, setSession, logout, hasFeature, refreshLookups, mustChangePassword, passwordChanged, accessMode, searchOnly]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
