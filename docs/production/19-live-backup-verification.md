@@ -9,7 +9,8 @@ server. Nothing in this document changes, restores or deletes a database.
 |---|---|---|
 | Live instance `LIVE-HOST\SQLEXPRESS`, `<live-host-ip>`, fixed TCP port 1433 | every 2022-2026 Access release links there (`15`, section A); the name resolves to that address from the office PC and the port answers (checked again 2026-11-27, nothing sent, no sign-in) | identified; the administrator confirms with `SELECT SERVERPROPERTY('ServerName')` |
 | Database `McLabor` | the copy's backup header: database `McLabor` from `LIVE-HOST\SQLEXPRESS`, SQL Server 15.0.2000, recovery model SIMPLE | identified |
-| This project has **never connected** to the live server | no live login exists for it; the read-only login is not created yet | by design |
+| This project has **never signed in** to the live server | no live login exists for it; the read-only login is not created yet | by design |
+| 2026-11-27 read-only probe (authorized by the owner): one connection attempt with the office PC's Windows identity, nothing typed, nothing written | `LIVE-HOST\SQLEXPRESS` by instance name: not found (the SQL Browser service is silent, so the fixed port must be given); `tcp:LIVE-HOST,1433`: a SQL Server answered and refused the sign-in as `LIVE-HOST\Guest` (error 18456). The office PC is not in a domain with the server, so **no administrator access exists from this PC**; one failed Guest sign-in is now in the server's log | the administrator runs the check |
 
 ## B. What is known about its backups, and from where
 
@@ -31,11 +32,24 @@ not in it, and whether the live server has taken newer backups cannot be seen fr
 
 ## C. What the administrator runs (read-only, 2 minutes)
 
-`tools/prod-check/backup/0-live-backup-status.sql` on the live server (edit `LIVE-HOST` first). It reads only the
-server's backup history and database properties and prints eight grids: server and Agent presence, the database's
-state and last backup dates, the newest full / differential / log backup with age, checksum flag, file path and
-whether the file still exists, the last 15 backups, every restore ever done there, scheduled jobs, all databases,
-and a plain-language verdict. Send the saved grids to the owner.
+Exact steps for the authorized SQL Server administrator, on the live server or any PC with Management Studio that
+can reach it:
+
+1. Open SQL Server Management Studio. Server name: `LIVE-HOST\SQLEXPRESS` (if that is not found, `LIVE-HOST,1433`:
+   the instance listens on the fixed port and the Browser service is off). Authentication: a sysadmin login.
+2. Run `SELECT SERVERPROPERTY('ServerName')` and write the result down: it is the live server's identity and goes into
+   the two scripts and into the website's settings.
+3. Open `tools/prod-check/backup/0-live-backup-status.sql` (in the owner's package). Replace `LIVE-HOST` at the top with
+   the name from step 2, including `\SQLEXPRESS`. Query > Results to Grid. Execute. Nothing is changed: the script reads
+   only the server's own backup history (`msdb`) and database properties, and asks Windows whether the backup files
+   still exist and how much disk space is free.
+4. Nine grids: server and Agent status, the database's state and last backup dates, the newest full / differential /
+   log backup with age in hours, checksum flag, file path and whether the file exists, the last 15 backups, every
+   restore ever done there, scheduled jobs, all databases, a plain-language verdict, free space per drive.
+5. Results > Save As (CSV or report), send the file to the owner. It contains no password and no business data.
+6. If grid 3 shows the newest full backup without checksums, also run
+   `RESTORE VERIFYONLY FROM DISK = N'<file from grid 3>'` (reads the file, restores nothing; a minute or two) and
+   add its message to the report.
 
 Decision from the grids:
 
@@ -52,6 +66,13 @@ server's own backup routine untouched (no differential base or chain is changed)
 script verifies the file with `RESTORE VERIFYONLY ... WITH CHECKSUM` and prints its header. Only reads the database;
 office users keep working. About 1.7 GB, a few minutes, into SQL Server's own backup folder (administrators only);
 a copy belongs outside the server (encrypted drive or administrators-only share), the client's choice.
+
+Storage: grid 9 of the status script shows the free space per drive and the default backup folder; about 1.8 GB is
+needed (database 2.26 GB allocated, backup 1.7 GB; Express cannot compress). Operational impact: `BACKUP DATABASE`
+is an online operation, nobody is disconnected and Access keeps working; it reads the whole data file once, so for
+a few minutes the server's disk is busier (the same 1.7 GB backup took 17 seconds on the office PC; on an older
+server expect 1 to 5 minutes). Do it at a quiet moment, not in the 6:00 or 12:30 synchronization windows once those
+exist.
 
 Not run by this project; the client's administrator approves and executes it. **No RESTORE, REPLACE, DROP or any
 change to the existing production database is proposed anywhere.** A restore test, if wanted on the live server,

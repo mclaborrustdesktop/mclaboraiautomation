@@ -15,6 +15,7 @@
 --   6 jobs            scheduled SQL Agent jobs (none expected on Express: backups then come from a Windows task or a tool)
 --   7 other databases all databases on the instance (looking for a second McLabor-like database)
 --   8 verdict         plain-language verdict on the newest full backup
+--   9 free space      free MB per drive (xp_fixeddrives) and the instance's default backup folder: a COPY_ONLY backup needs about 1.8 GB
 
 IF CAST(SERVERPROPERTY('ServerName') AS nvarchar(128)) <> N'LIVE-HOST\SQLEXPRESS'
 BEGIN
@@ -92,6 +93,14 @@ SELECT CASE
          ELSE N'A recent full backup with checksums exists and its file is present. Verify it with RESTORE VERIFYONLY ... WITH CHECKSUM (or a restore test) and record the result.'
        END AS verdict,
        N'Grid 5 shows whether a restore test was ever done here; a backup is only proven when it has been restored once.' AS note;
+
+-- 9 free space for a backup
+IF OBJECT_ID('tempdb..#drives') IS NOT NULL DROP TABLE #drives;
+CREATE TABLE #drives (drive char(1), free_mb int);
+INSERT INTO #drives EXEC master.dbo.xp_fixeddrives;
+SELECT drive, free_mb, CAST(SERVERPROPERTY('InstanceDefaultBackupPath') AS nvarchar(260)) AS default_backup_folder,
+       CASE WHEN free_mb > 4000 THEN N'enough for a 1.8 GB COPY_ONLY backup' ELSE N'TIGHT: choose another folder for script 4' END AS room
+FROM #drives ORDER BY drive;
 GO
 SET NOEXEC OFF;
 GO
