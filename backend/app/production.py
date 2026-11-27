@@ -90,7 +90,7 @@ def build_sql_server_url() -> URL:
     query = {
         "driver": driver_name(),
         "Encrypt": "yes" if s.db_encrypt else "no",
-        "TrustServerCertificate": "yes" if s.db_trust_server_certificate else "no",
+        "TrustServerCertificate": "yes" if s.db_trust_server_certificate else "no",  # 'yes' only with the owner's TLS waiver (config rule)
         "APP": f"MC Labor Web {s.environment}" + (" (read-only)" if not s.sql_writes_allowed else ""),
         # cloud databases drop idle connections and have short transient outages: let the driver retry a lost
         # connection a few times before the website reports an error (ODBC Driver 17.1 and newer)

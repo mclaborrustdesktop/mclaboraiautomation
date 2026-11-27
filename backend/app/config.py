@@ -124,6 +124,12 @@ class Settings(BaseSettings):
     production_db_password: str | None = None  # set in backend/.env only - never committed, never logged
     production_db_encrypt: bool = True
     production_db_trust_server_certificate: bool = False
+    # TLS waiver: the live server has no certificate the office PC trusts and installing one needs its administrator.
+    # Setting <ENV>_DB_TRUST_SERVER_CERTIFICATE=true is accepted ONLY together with a non-empty <ENV>_DB_TLS_WAIVER holding the
+    # owner's written statement (who approved, when). The connection stays encrypted; only the server's identity is unverified,
+    # the same level the Access application works at (it uses no encryption at all). Logged at every start.
+    production_db_tls_waiver: str = ""
+    staging_db_tls_waiver: str = ""
     production_writes_enabled: bool = False
     production_write_approval: str | None = None  # change-ticket / sign-off reference required to enable writes
     schema_csv_dir: str = str(BACKEND_DIR.parent / "docs" / "schema")
@@ -352,6 +358,10 @@ class Settings(BaseSettings):
         return bool(self._db("trust_server_certificate"))
 
     @property
+    def db_tls_waiver(self) -> str:
+        return str(self._db("tls_waiver") or "").strip()
+
+    @property
     def sql_writes_enabled(self) -> bool:
         return self.is_sql_server and bool(getattr(self, f"{self.environment}_writes_enabled"))
 
@@ -546,8 +556,9 @@ class Settings(BaseSettings):
         if self.anthropic_api_key and not (self.claude_real_data_approval or "").strip():
             p.append("ANTHROPIC_API_KEY is set, so questions about real data would go to an outside AI service. Remove the key, "
                      "or record the owner's written approval in CLAUDE_REAL_DATA_APPROVAL.")
-        if self.is_sql_server and self.db_trust_server_certificate:
-            p.append(f"{E}_DB_TRUST_SERVER_CERTIFICATE must stay false: the server certificate has to be verified.")
+        if self.is_sql_server and self.db_trust_server_certificate and len(self.db_tls_waiver) < 20:
+            p.append(f"{E}_DB_TRUST_SERVER_CERTIFICATE=true needs {E}_DB_TLS_WAIVER: the owner's written statement (20+ characters, who approved and when) "
+                     "that the server certificate is not verified on the office network until a trusted certificate is installed.")
         if (self.sync_api_key or "").strip() and len((self.sync_api_key or "").strip()) < 32:
             p.append("SYNC_API_KEY must be at least 32 random characters.")
         if (self.sync_api_key or "").strip() and self.is_sql_server:
