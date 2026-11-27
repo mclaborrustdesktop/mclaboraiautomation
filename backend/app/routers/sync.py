@@ -125,6 +125,15 @@ def finish(run_id: int, body: FinishIn):
     return {"ok": True}
 
 
+@router.get("/counts", dependencies=[Depends(require_agent)])
+def counts():
+    """Row count per mirror table and the source of the last successful run: what the office agent compares its own
+    source counts with after a run (reconciliation). Counts only, never a row."""
+    last = syncmirror.recent_runs(1)
+    return {"environment": settings.environment, "counts": syncmirror.row_counts(engine),
+            "last_run": {"status": last[0]["status"], "source": last[0]["source"], "finished_at": last[0]["finished_at"]} if last else None}
+
+
 @router.get("/status")
 def sync_status(_: m.OfficeStaff = Depends(get_current_user)):
     """When the information was last refreshed from the office system, and whether it is outdated (every signed-in user)."""

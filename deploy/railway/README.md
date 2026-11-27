@@ -1,4 +1,10 @@
-# Railway + PostgreSQL deployment (prepared 2026-11-24; nothing deployed, nothing purchased)
+# Railway + PostgreSQL deployment (prepared 2026-11-24; staging live since 2026-11-26)
+
+> **2026-11-27:** entrance is the single access password (`docs/cloud/18`), Cloudflare postponed, no device layer.
+> Production is created by `create-production.ps1` (plan mode by default; `-Execute` after the owner's approval) from the
+> variable files built by `tools/railway/Build-ProductionVariables.ps1`; plan and approvals in `docs/cloud/19`, risk
+> acknowledgment in `docs/cloud/20`. The Cloudflare Access paragraphs below describe the original design and stay valid
+> as the later option.
 
 > **First release (decided 2026-11-24): the office SQL Server and Access stay the primary system.** The Railway
 > database is a **search-only mirror** refreshed twice a day by the office agent (`docs/cloud/13-one-way-sync.md`,

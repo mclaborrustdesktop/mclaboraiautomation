@@ -49,6 +49,9 @@ with TestClient(app) as c:
     out["table_refused"] = r.status_code
     target.finish_run(run_id, "failed", error="test")
     out["finished_twice"] = c.post(f"/api/sync/runs/{run_id}/finish", headers={"X-Sync-Key": key}, json={"status": "success"}).status_code
+    cnt = c.get("/api/sync/counts", headers={"X-Sync-Key": key})
+    out["agent_counts"] = cnt.status_code == 200 and cnt.json()["counts"]["tblEmployee"] == n_emp and cnt.json()["last_run"]["source"] == "sqlite (given)"
+    out["agent_counts_anonymous"] = c.get("/api/sync/counts").status_code
     # the website on the mirror
     with SessionLocal() as s:
         staff = s.execute(text('SELECT "OfficeStaffID" FROM "tblOfficeStaff" WHERE "Initials" = \'ARI\'')).scalar_one()
@@ -123,6 +126,7 @@ def test_agent_feeds_the_search_only_website_through_the_api(pg, tmp_path):  # n
     assert out["run1"]["mode"] == "full" and out["run1"]["tables"] == 33 and out["run1"]["deleted"] == 0 and out["run1"]["upserted"] >= 5000
     assert out["ssn_refused"][0] == 422 and "not approved" in out["ssn_refused"][1] and out["table_refused"] == 422 and out["finished_twice"] == 409
     assert out["foreign_source_refused"] == 409
+    assert out["agent_counts"] is True and out["agent_counts_anonymous"] in (401, 403)
     assert out["mirror_has_no_sensitive_columns"] and out["login"] == 200 and out["me"] == [True, True, "admin"] and out["site_mode"] == "search-only"
     assert out["employees_total"] and out["record"] == 200 and out["kw_search"] and out["ai_search"] and out["customers"] and out["tracking_board"] == 200 and out["dashboard"] == 200
     assert out["writes"] == [423] * 6 and out["edit_features_hidden"] and out["grant_access"] == 200

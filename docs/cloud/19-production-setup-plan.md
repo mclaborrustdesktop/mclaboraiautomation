@@ -50,8 +50,12 @@ On the office PC that will run the agent, as the Windows account of the future s
 3. `run-sync.ps1 -Bootstrap -Full`: creates the mirror tables on the production PostgreSQL and sends the approved
    columns once (about 1.2 M rows; staging took 30 minutes for 174 k rows over the public address, so expect 2-3 hours
    for the first run; later runs send only changed rows).
-4. Checks on the website: counts match the dry run, "Information as of" shows the run time, searches answer, every
-   Add/Edit/Delete refused, the unlock log shows the owner's own entry. `tools/containers/smoke_test.py --expect production`.
+4. Reconciliation: the agent was run with `--report-file <path>` (per-table source counts); then
+   `python -m app.syncagent reconcile --api https://<host> --report-file <path> --expect-source "<live server>\SQLEXPRESS/McLabor"`
+   must print ALL MATCH (every table's source count equals the website's count, no extra table on the website, the
+   website's last run came from the live server and succeeded). Then on the website: "Information as of" shows the run
+   time, searches answer, every Add/Edit/Delete refused, the unlock log shows the owner's own entry;
+   `tools/containers/smoke_test.py --expect production`.
 
 **Gate 5 - the schedule (owner's approval).** `register-sync-task.ps1 -Times "06:00,12:30"` on the office PC:
 Windows Task Scheduler, office-local time, S4U (no stored password), no overlap, retry after 15 minutes, logs under
@@ -95,13 +99,48 @@ per employee, audited per device. Data: SQL Server stays the source of truth; th
 layer) feeds the mirror one way, twice a day; the website refuses every write (423). Backups: daily and weekly
 snapshots plus point-in-time recovery on the production database; sync runs logged on both sides.
 
+## E. Final production configuration (prepared 2026-11-27; files built and verified locally, nothing created)
+
+| Item | Value |
+|---|---|
+| Railway project | `mclabor-production`, workspace "mclaborrustdesktop's Projects" (ray@mclabor.com, Pro); created by `deploy/railway/create-production.ps1 -Execute` after approval (plan mode prints every step) |
+| Services | `Postgres` (template, private network only, 1 GB volume), `backend` (root `/`, `deploy/railway/backend.railway.json`, no public address), `frontend` (root `frontend`, the only public address) |
+| Entrance | `ACCESS_MODE=passcode`, new production password (20 random characters, DPAPI-stored locally; hash in a sealed variable), label `production-2026-11`, `SITE_DEVICE_APPROVAL=false`, sessions 480 min, lockout 5/15 min, site-wide 50 |
+| Identity | `SITE_DEFAULT_USER` = the staff record everyone acts as (initials **to be confirmed by the client**); `WEB_ADMINS` = that record or empty (client's choice, see `docs/cloud/20`) |
+| Data | `SITE_MODE=search-only`, `DB_SHAPE=production`, `SYNC_EXPECTED_SOURCE=<live server>\SQLEXPRESS/McLabor` (any other source refused with 409), `OFFICE_HOSTS` set (office servers refused as targets), no outside AI key |
+| Secrets | `JWT_SECRET`, `SYNC_API_KEY`, `SITE_PASSWORD_HASH`: new, all different from staging (verified), sealed in the dashboard after import |
+| Backups | daily + weekly volume snapshots, point-in-time recovery on, one on-demand snapshot before the import, restore drill into a scratch service |
+| Browser hardening | HSTS, X-Content-Type-Options, X-Frame-Options DENY, Referrer-Policy, Permissions-Policy, Content-Security-Policy on every response (`frontend/next.config.ts`) |
+| Office agent | `sync.env` built for the live server (read-only login `mclabor_web_read`, TLS with certificate check, writes disabled, `SYNC_API` = the production address once it exists); secrets via `store-sync-secrets.ps1 -Environment production`; schedule `register-sync-task.ps1 -Times "06:00,12:30"` (office-local, S4U) |
+| Verification tooling | `tools/railway/Build-ProductionVariables.ps1` (builds the three files, owner-only permissions) + `verify_production_variables.py` (28 checks, 27 pass; the one open item is the initials decision) |
+| Synthetic data cannot enter production | new empty database; the synthetic builder refuses office hosts and non-empty databases; the ingest API refuses any source other than the live server; reconciliation compares every table with the live counts |
+
+Files on this PC (never committed): `%LOCALAPPDATA%\MCLabor\production\backend.production.variables.env`,
+`frontend.production.variables.env`, `sync.env`, `site-password-production.dpapi`, `railway-production-secrets.json`,
+`live-server-readonly-login-package.zip`.
+
+## F. Network-level protections that keep the password-only experience (assessment 2026-11-27)
+
+| Option | Effect | Cost | Status |
+|---|---|---|---|
+| Railway private network for backend and database | neither has a public address; only the frontend is reachable | 0 | in place (staging), planned (production) |
+| Application lockout (per address, doubling; site-wide pressure with known-address exemption) | stops password guessing without locking the company out | 0 | in place |
+| Browser hardening headers (HSTS, CSP, frame denial) | blocks framing/clickjacking, script injection, downgrade | 0 | added 2026-11-27 |
+| Cloudflare Free proxy on a custom host: WAF managed rules, rate-limit rule on `/api/auth/unlock`, bot fight mode, optional office-address rule, Railway domain removed | hides the Railway address, adds edge rate limiting and bot filtering; the password screen stays the only step for people | 0 (needs the domain's DNS at Cloudflare) | **postponed** by the client |
+| Office-address allow-list on the password screen (app setting) | only office addresses could reach the password screen | 0 | rejected: the client wants access from any computer or phone |
+| Cloudflare Access (identity or certificates) | per-person identity | about 7 USD per user per month | postponed; contradicts the password-only wish |
+| VPN / IP allow-list at Railway | Railway has no edge allow-list or WAF of its own | - | not available |
+
+Recommendation when Cloudflare is discussed: the Free proxy with the rate-limit rule is the one addition that changes
+the picture (risk 3 of `docs/cloud/20`) at no cost and without touching the sign-in experience.
+
 ## D. Approvals still required from the owner
 
 0. (Dropped 2026-11-27: the device layer is off, so no SSH key and no device approval are needed for website access.
    The prepared Ed25519 key on the office PC stays unregistered.)
 1. Gate 1: authorize the administrator to run the two scripts on the live server and return the verification output.
 2. Gate 2: approve creating the production project (cost above) and the production site password rotation.
-3. Gate 3: confirm in writing the password-only arrangement and its accepted risks (`docs/cloud/18` section 2);
-   Cloudflare postponed.
+3. Gate 3: sign the risk acknowledgment `docs/cloud/20` (arrangement, six risks, the two choices: initials of the
+   shared staff record, administrator pages yes/no); Cloudflare postponed.
 4. Gate 4: the initial transfer of real records, after the backups are verified.
 5. Gate 5: the 06:00 / 12:30 schedule.

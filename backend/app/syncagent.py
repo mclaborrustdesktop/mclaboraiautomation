@@ -28,7 +28,7 @@ import socket
 import sqlite3
 import sys
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterator
@@ -245,6 +245,12 @@ class ApiTarget:
     def begin_run(self, mode: str, source: str, allow_mass_delete: bool = False) -> int:
         return int(self._post("/api/sync/runs", {"mode": mode, "source": source, "agent": AGENT_VERSION, "allow_mass_delete": allow_mass_delete})["run_id"])
 
+    def _get(self, path: str) -> dict:
+        r = self.client.get(f"{self.base}{path}", headers=self.headers)
+        if r.status_code != 200:
+            raise RuntimeError(f"GET {path} -> HTTP {r.status_code}: {r.text[:200]}")
+        return r.json()
+
     def upsert(self, run_id: int, table: str, rows: list[dict[str, Any]]) -> int:
         return int(self._post(f"/api/sync/runs/{run_id}/upsert", {"table": table, "rows": rows}).get("upserted", len(rows)))
 
@@ -382,6 +388,31 @@ def _key_from(args) -> str:
     return key
 
 
+def compare_counts(report: dict, remote: dict, expect_source: str | None = None) -> list[str]:
+    """Reconciliation after a run: every approved table's source count (what the agent read) must equal the website's
+    mirror count, the website must hold no table the agent did not send, and its last run must come from the expected
+    source. Returns the list of problems (empty = all match)."""
+    problems: list[str] = []
+    per_table = report.get("per_table") or {}
+    counts = remote.get("counts") or {}
+    for table, info in sorted(per_table.items()):
+        src = int(info.get("source_rows") or 0)
+        got = counts.get(table)
+        if got is None:
+            problems.append(f"{table}: the website has no such table")
+        elif int(got) != src:
+            problems.append(f"{table}: source {src:,} rows, website {int(got):,}")
+    for table, n in sorted(counts.items()):
+        if table not in per_table and int(n or 0) > 0:
+            problems.append(f"{table}: {int(n):,} rows on the website but the agent did not read that table")
+    last = remote.get("last_run") or {}
+    if expect_source and (last.get("source") or "").strip().lower() != expect_source.strip().lower():
+        problems.append(f"the website's last run came from '{last.get('source')}', expected '{expect_source}'")
+    if last and last.get("status") not in ("success", None):
+        problems.append(f"the website's last run ended with status '{last.get('status')}'")
+    return problems
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="python -m app.syncagent", description="One-way synchronization: office SQL Server -> cloud mirror")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -402,8 +433,15 @@ def main(argv: list[str]) -> int:
     r.add_argument("--limit", type=int, help="rows per table (tests)")
     r.add_argument("--bootstrap", action="store_true", help="create the mirror tables first")
     r.add_argument("--log-file")
+    r.add_argument("--report-file", help="write the full run report (per-table counts) as JSON here, for reconciliation")
     s = sub.add_parser("status", help="show the agent's last runs")
     s.add_argument("--state")
+    c = sub.add_parser("reconcile", help="compare a run report's source counts with the website's mirror counts")
+    c.add_argument("--api", required=True)
+    c.add_argument("--key-env", default="SYNC_API_KEY")
+    c.add_argument("--key-file")
+    c.add_argument("--report-file", required=True)
+    c.add_argument("--expect-source", help="the source label the website must report for its last run (e.g. the live server)")
     args = ap.parse_args(argv[1:])
 
     handlers = [logging.StreamHandler(sys.stdout)]
@@ -411,6 +449,20 @@ def main(argv: list[str]) -> int:
         Path(args.log_file).parent.mkdir(parents=True, exist_ok=True)
         handlers.append(logging.FileHandler(args.log_file, encoding="utf-8"))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", handlers=handlers)
+
+    if args.cmd == "reconcile":
+        report = json.loads(Path(args.report_file).read_text(encoding="utf-8"))
+        target = ApiTarget(args.api, _key_from(args))
+        try:
+            remote = target._get("/api/sync/counts")
+        finally:
+            target.close()
+        problems = compare_counts(report, remote, args.expect_source)
+        for line in problems:
+            print("  MISMATCH:", line)
+        print(f"reconciliation: {len(report.get('per_table', {}))} tables compared with the website ({remote.get('environment')}): "
+              f"{'ALL MATCH' if not problems else str(len(problems)) + ' problem(s)'}")
+        return 0 if not problems else 1
 
     state = State(args.state or default_state_path())
     if args.cmd == "status":
@@ -435,6 +487,9 @@ def main(argv: list[str]) -> int:
             log.info("sync: mirror tables: %s", ", ".join(target.bootstrap()))
         rep = run(source, target, state, full=args.full, dry_run=args.dry_run, tables=args.tables.split(",") if args.tables else None, allow_mass_delete=args.allow_mass_delete)
         print(json.dumps({k: v for k, v in rep.items() if k != "per_table"}))
+        if getattr(args, "report_file", None):
+            Path(args.report_file).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.report_file).write_text(json.dumps({**rep, "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "source": source.label}, indent=1), encoding="utf-8")
         return 2 if rep["warnings"] else 0  # 2 = completed with skipped deletions: look at the log
     except Exception as exc:  # noqa: BLE001
         print(f"SYNC FAILED: {type(exc).__name__}: {exc}")
