@@ -4,6 +4,9 @@
 --
 -- Before Execute: replace LIVE-HOST (one place below) with the server name from SELECT SERVERPROPERTY('ServerName'),
 -- including \SQLEXPRESS. The script stops on any other server.
+-- Login: a sysadmin gives every grid. A lesser login that may read msdb's backup history gives grids 1-8 and marks the
+-- file-existence and free-space answers as "could not ask"; "SELECT permission was denied" means the login may not read
+-- the backup history at all - use a sysadmin login then.
 --
 -- Result grids:
 --   1 server          name, edition, version, SQL Server Agent present (Express: never), start time
@@ -59,8 +62,13 @@ WHILE @@FETCH_STATUS = 0
 BEGIN
     IF OBJECT_ID('tempdb..#fe') IS NOT NULL DROP TABLE #fe;
     CREATE TABLE #fe (file_exists int, is_directory int, parent_exists int);
-    INSERT INTO #fe EXEC master.dbo.xp_fileexist @f;
-    UPDATE #latest SET file_exists = (SELECT file_exists FROM #fe) WHERE type_name = @t;
+    BEGIN TRY
+        INSERT INTO #fe EXEC master.dbo.xp_fileexist @f;
+        UPDATE #latest SET file_exists = (SELECT file_exists FROM #fe) WHERE type_name = @t;
+    END TRY
+    BEGIN CATCH
+        UPDATE #latest SET file_exists = -1 WHERE type_name = @t;   -- -1 = could not ask Windows (needs a sysadmin login); check the file by hand
+    END CATCH;
     FETCH NEXT FROM c INTO @t, @f;
 END
 CLOSE c; DEALLOCATE c;
@@ -97,9 +105,14 @@ SELECT CASE
 -- 9 free space for a backup
 IF OBJECT_ID('tempdb..#drives') IS NOT NULL DROP TABLE #drives;
 CREATE TABLE #drives (drive char(1), free_mb int);
-INSERT INTO #drives EXEC master.dbo.xp_fixeddrives;
+BEGIN TRY
+    INSERT INTO #drives EXEC master.dbo.xp_fixeddrives;
+END TRY
+BEGIN CATCH
+    INSERT INTO #drives VALUES ('?', -1);   -- needs a sysadmin login: check free space in Windows Explorer instead
+END CATCH;
 SELECT drive, free_mb, CAST(SERVERPROPERTY('InstanceDefaultBackupPath') AS nvarchar(260)) AS default_backup_folder,
-       CASE WHEN free_mb > 4000 THEN N'enough for a 1.8 GB COPY_ONLY backup' ELSE N'TIGHT: choose another folder for script 4' END AS room
+       CASE WHEN free_mb < 0 THEN N'could not ask (not sysadmin): check free space in Explorer' WHEN free_mb > 4000 THEN N'enough for a 1.8 GB COPY_ONLY backup' ELSE N'TIGHT: choose another folder for script 4' END AS room
 FROM #drives ORDER BY drive;
 GO
 SET NOEXEC OFF;
