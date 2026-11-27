@@ -1,17 +1,23 @@
-"""Runs one reviewed script on the live SQL Server and writes a report. Called by tools/production/Invoke-LiveAdmin.ps1,
-which supplies the administrator credential through the environment (LIVE_ADMIN_LOGIN / LIVE_ADMIN_PASSWORD) and, for
-the read-only login, READONLY_LOGIN_PASSWORD. Nothing secret is printed or written.
+"""Runs ONE reviewed script on the live SQL Server and writes a report. Called by tools/production/Invoke-LiveAdmin.ps1.
+
+Credential: a single JSON line on STDIN, {"login": "...", "password": "...", "readonly_login_password": "..."} - never an
+argument, never an environment variable, never printed, never written. --trusted (Windows authentication) is for the
+local validation on the office copy only.
 
   --mode backup-status | verify-login | verifyonly         read-only
-  --mode copy-only-backup | readonly-login  (+ --approve)  change the server; refused without --approve
-  --trusted                                                Windows authentication (local validation on the office copy only)
+  --mode copy-only-backup | readonly-login                 change the server; refused unless --approve <same mode name>
 
-Guards: the server must report the expected instance name (--expect) or nothing runs; the SQL files' own
-"wrong server" guard is satisfied by substituting that verified name for the LIVE-HOST placeholder in memory."""
+Guards: (1) the connected server must report the expected instance name or nothing runs; (2) each approved script is
+pinned by SHA-256 and refused if its text changed; (3) a pre-flight asks the server whether the login holds the
+permissions the mode needs and refuses otherwise; (4) the SQL files' own "wrong server" guard is satisfied by
+substituting the verified name for the LIVE-HOST placeholder in memory. No other SQL is ever sent except the fixed
+identity, pre-flight and VERIFYONLY statements below."""
 from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
+import json
 import os
 import re
 import sys
@@ -27,7 +33,25 @@ SCRIPTS = {
     "copy-only-backup": HERE / "backup" / "4-live-copyonly-backup-with-checksum.sql",
     "readonly-login": HERE / "proposed-grants-production.sql",
 }
+# SHA-256 of each approved script (line endings normalised). `python live_admin.py --show-hashes` prints the current values.
+APPROVED_SHA256 = {
+    "backup-status": "4e940fe9e7e0e280131ef9dc24f7c1a1ab5821fe8bd7c450ebda8adfa2cfaf9b",
+    "verify-login": "6b5376d8c086e7f065a2a1e66486431a2d5f1304213f1d6c9e72f7676595af47",
+    "copy-only-backup": "a12342e141584eaf6c72db8651a8582e3a8f1b2e2f7b2f6039a620c692261d89",
+    "readonly-login": "079ec2522372a0c1cfbc1c0c300cc3ed481d2b0d0b4e996221174e6b8d5c9ce4",
+}
 CHANGING = {"copy-only-backup", "readonly-login"}
+
+# what each mode needs from the login (asked with HAS_PERMS_BY_NAME / IS_SRVROLEMEMBER before anything runs)
+PREFLIGHT = {
+    "backup-status": "SELECT HAS_PERMS_BY_NAME('msdb.dbo.backupset', 'OBJECT', 'SELECT') AS read_backup_history, HAS_PERMS_BY_NAME('McLabor', 'DATABASE', 'ANY') AS see_mclabor, HAS_PERMS_BY_NAME(NULL, NULL, 'VIEW SERVER STATE') AS view_server_state",
+    "verifyonly": "SELECT HAS_PERMS_BY_NAME('msdb.dbo.backupset', 'OBJECT', 'SELECT') AS read_backup_history, "
+                  "CASE WHEN IS_SRVROLEMEMBER('sysadmin') = 1 OR HAS_PERMS_BY_NAME(NULL, NULL, 'CREATE ANY DATABASE') = 1 THEN 1 ELSE 0 END AS may_verify_backup_file",
+    "verify-login": "SELECT CASE WHEN IS_SRVROLEMEMBER('sysadmin') = 1 OR HAS_PERMS_BY_NAME(NULL, NULL, 'CONTROL SERVER') = 1 OR HAS_PERMS_BY_NAME('mclabor_web_read', 'LOGIN', 'IMPERSONATE') = 1 THEN 1 ELSE 0 END AS may_impersonate_readonly_login",
+    "copy-only-backup": "SELECT CASE WHEN IS_SRVROLEMEMBER('sysadmin') = 1 OR HAS_PERMS_BY_NAME('McLabor', 'DATABASE', 'BACKUP DATABASE') = 1 THEN 1 ELSE 0 END AS may_backup_mclabor",
+    "readonly-login": "SELECT CASE WHEN IS_SRVROLEMEMBER('sysadmin') = 1 OR (HAS_PERMS_BY_NAME(NULL, NULL, 'ALTER ANY LOGIN') = 1 AND HAS_PERMS_BY_NAME('McLabor', 'DATABASE', 'ALTER ANY USER') = 1 "
+                      "AND HAS_PERMS_BY_NAME('McLabor', 'DATABASE', 'ALTER ANY ROLE') = 1 AND HAS_PERMS_BY_NAME('McLabor', 'DATABASE', 'CONTROL') = 1) THEN 1 ELSE 0 END AS may_create_readonly_login",
+}
 
 # verify-readonly-login.sql, 11 grids, what each must show (docs/production/18, step 3)
 VERIFY_EXPECT = [
@@ -45,15 +69,13 @@ VERIFY_EXPECT = [
 ]
 
 
-def connect(server: str, trusted: bool, database: str = "master") -> pyodbc.Connection:
+def script_hash(path: Path) -> str:
+    return hashlib.sha256(path.read_text(encoding="utf-8-sig").replace("\r\n", "\n").encode("utf-8")).hexdigest()
+
+
+def connect(server: str, cred: dict | None, database: str = "master") -> pyodbc.Connection:
     base = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};Encrypt=yes;TrustServerCertificate=yes;APP=mclabor-live-admin"
-    if trusted:
-        cs = base + ";Trusted_Connection=yes"
-    else:
-        login, pw = os.environ.get("LIVE_ADMIN_LOGIN"), os.environ.get("LIVE_ADMIN_PASSWORD")
-        if not login or not pw:
-            sys.exit("no administrator credential in the environment (run through Invoke-LiveAdmin.ps1)")
-        cs = base + f";UID={login};PWD={pw}"
+    cs = base + ";Trusted_Connection=yes" if cred is None else base + f";UID={cred['login']};PWD={cred['password']}"
     return pyodbc.connect(cs, timeout=15, autocommit=True)
 
 
@@ -92,38 +114,64 @@ def write_report(mode: str, server_name: str, login: str, grids, messages, summa
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     stamp = dt.datetime.now().strftime("%Y-%m-%d_%H%M%S")
     path = REPORT_DIR / f"live-{mode}-{stamp}.md"
-    body = [f"# Live server: {mode} ({stamp})", "", f"Server: `{server_name}`. Run as: `{login}`. Script: `{SCRIPTS.get(mode, Path(mode)).name if mode in SCRIPTS else mode}`.", ""]
+    body = [f"# Live server: {mode} ({stamp})", "", f"Server: `{server_name}`. Run as: `{login}`. Script: `{SCRIPTS[mode].name if mode in SCRIPTS else 'RESTORE VERIFYONLY'}`.", ""]
     body += ["## Summary", ""] + [f"- {s}" for s in summary] + [""]
     for i, (cols, rows) in enumerate(grids, 1):
         body += [f"## Grid {i}", "", md_table(cols, rows), ""]
     if messages:
         body += ["## Server messages", ""] + [f"    {m}" for m in messages] + [""]
     path.write_text("\n".join(body), encoding="utf-8")
-    log = REPORT_DIR / "live-admin-log.md"
-    with log.open("a", encoding="utf-8") as f:
+    with (REPORT_DIR / "live-admin-log.md").open("a", encoding="utf-8") as f:
         f.write(f"- {stamp} `{mode}` on `{server_name}` as `{login}`: {summary[0] if summary else 'done'} -> {path.name}\n")
     return path
 
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--server", required=True)
-    ap.add_argument("--expect", required=True, help="the instance name the server must report")
-    ap.add_argument("--mode", required=True, choices=sorted(set(SCRIPTS) | {"verifyonly"}))
-    ap.add_argument("--approve", action="store_true")
-    ap.add_argument("--trusted", action="store_true")
+    ap.add_argument("--server")
+    ap.add_argument("--expect", help="the instance name the server must report")
+    ap.add_argument("--mode", choices=sorted(set(SCRIPTS) | {"verifyonly"}))
+    ap.add_argument("--approve", default="", help="must equal --mode for a changing script")
+    ap.add_argument("--trusted", action="store_true", help="Windows authentication (local validation on the office copy only)")
+    ap.add_argument("--show-hashes", action="store_true")
     a = ap.parse_args(argv[1:])
-    if a.mode in CHANGING and not a.approve:
-        print(f"REFUSED: '{a.mode}' changes the live server and was not approved (--approve).")
+    if a.show_hashes:
+        for mode, path in SCRIPTS.items():
+            print(f'    "{mode}": "{script_hash(path)}",')
+        return 0
+    if not (a.server and a.expect and a.mode):
+        ap.error("--server, --expect and --mode are required")
+    if a.mode in CHANGING and a.approve != a.mode:
+        print(f"REFUSED: '{a.mode}' changes the live server; it runs only with --approve {a.mode} given for this very run.")
         return 3
+    if a.mode in SCRIPTS and script_hash(SCRIPTS[a.mode]) != APPROVED_SHA256[a.mode]:
+        print(f"REFUSED: {SCRIPTS[a.mode].name} differs from the reviewed version (hash mismatch). Nothing was run.")
+        return 7
 
-    cn = connect(a.server, a.trusted)
+    cred = None
+    if not a.trusted:
+        try:
+            cred = json.loads(sys.stdin.readline())
+        except json.JSONDecodeError:
+            cred = {}
+        if not cred.get("login") or not cred.get("password"):
+            print("no administrator credential on standard input (run through Invoke-LiveAdmin.ps1)")
+            return 6
+
+    cn = connect(a.server, cred)
     cur = cn.cursor()
     name, login, sysadmin = cur.execute("SELECT CAST(SERVERPROPERTY('ServerName') AS nvarchar(128)), SUSER_SNAME(), IS_SRVROLEMEMBER('sysadmin')").fetchone()
     print(f"connected: {name}  as {login}  sysadmin={sysadmin}")
     if name.lower() != a.expect.lower():
         print(f"REFUSED: the server reports '{name}', expected '{a.expect}'. Nothing was run.")
         return 4
+    pre = cur.execute(PREFLIGHT[a.mode]).fetchone()
+    pre_cols = [d[0] for d in cur.description]
+    missing = [c for c, v in zip(pre_cols, pre) if int(v or 0) != 1]
+    print("pre-flight: " + ", ".join(f"{c}={int(v or 0)}" for c, v in zip(pre_cols, pre)))
+    if missing:
+        print(f"REFUSED: the login '{login}' lacks: {', '.join(missing)}. Nothing was run.")
+        return 8
 
     summary: list[str] = []
     if a.mode == "verifyonly":
@@ -135,26 +183,31 @@ def main(argv: list[str]) -> int:
             return 5
         device, finished, checks = row
         print(f"RESTORE VERIFYONLY of {device} (backup of {finished}, checksums={checks}) ...")
-        sql = f"RESTORE VERIFYONLY FROM DISK = N'{device}'" + (" WITH CHECKSUM" if checks else "")
+        sql = f"RESTORE VERIFYONLY FROM DISK = N'{str(device).replace(chr(39), chr(39) * 2)}'" + (" WITH CHECKSUM" if checks else "")
         try:
             grids, messages = run_batches(cn, sql)
             summary = [f"VERIFYONLY OK: {device} (backup finished {finished})"] + messages
         except pyodbc.Error as exc:
-            summary = [f"VERIFYONLY FAILED: {str(exc)[:200]}"]
-            grids, messages = [], []
+            summary, grids, messages = [f"VERIFYONLY FAILED: {str(exc)[:200]}"], [], []
     else:
         sql = SCRIPTS[a.mode].read_text(encoding="utf-8-sig")
         sql = sql.replace("N'LIVE-HOST\\SQLEXPRESS'", f"N'{name}'").replace("LIVE-HOST\\SQLEXPRESS", name)
         if a.mode == "readonly-login":
-            pw = os.environ.get("READONLY_LOGIN_PASSWORD", "")
+            pw = (cred or {}).get("readonly_login_password", "")
             if len(pw) < 16:
-                print("no generated password for mclabor_web_read in the environment")
+                print("no generated password for mclabor_web_read was supplied")
                 return 6
             sql = sql.replace("<<TYPE-A-LONG-PASSWORD-HERE>>", pw.replace("'", "''"))
         if a.mode == "verify-login":
             cn.close()
-            cn = connect(a.server, a.trusted, database="McLabor")
-        grids, messages = run_batches(cn, sql)
+            cn = connect(a.server, cred, database="McLabor")
+        try:
+            grids, messages = run_batches(cn, sql)
+        except pyodbc.Error as exc:
+            summary = [f"SCRIPT FAILED on the server: {str(exc)[:300]}"]
+            path = write_report(a.mode, name, login, [], [], summary)
+            print(" ", summary[0]); print(f"report: {path}")
+            return 1
 
         if a.mode == "backup-status":
             latest = {str(r[0]).upper(): r for cols, rows in grids[2:3] for r in rows}
