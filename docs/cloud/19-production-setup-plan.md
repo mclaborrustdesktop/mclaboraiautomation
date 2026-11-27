@@ -16,6 +16,11 @@ client's administrator.
 
 ## B. Gates and the order of work
 
+**Gate 0 - backup status of the live database (administrator, read-only, 2 minutes).** `docs/production/19`:
+`0-live-backup-status.sql` on the live server; proceed only with a full backup younger than 24 hours, present and
+verified, or after the COPY_ONLY full backup with checksum (script 4, approved by the administrator). The restored
+copy on the office PC is a 2026-11-13 snapshot, not a backup of production.
+
 **Gate 1 - the live server's read-only account (administrator).** `docs/production/18-live-server-readonly-login-procedure.md`:
 confirm the server name, run `proposed-grants-production.sql`, run `verify-readonly-login.sql`, send the grids;
 from the office PC `check_readonly.py` must say READY. Proves: only the 288 approved columns of the 33 tables are
@@ -138,6 +143,8 @@ the picture (risk 3 of `docs/cloud/20`) at no cost and without touching the sign
 
 0. (Dropped 2026-11-27: the device layer is off, so no SSH key and no device approval are needed for website access.
    The prepared Ed25519 key on the office PC stays unregistered.)
+0. Gate 0: the administrator runs the read-only backup-status script on the live server and returns the grids; if no
+   recent verified full backup exists, approves and runs the COPY_ONLY backup script.
 1. Gate 1: authorize the administrator to run the two scripts on the live server and return the verification output.
 2. Gate 2: approve creating the production project (cost above) and the production site password rotation.
 3. Gate 3: sign the risk acknowledgment `docs/cloud/20` (arrangement, six risks, the two choices: initials of the

@@ -6,7 +6,10 @@ existing permission. Budget: about 15 minutes, no downtime, no restart, no Acces
 
 ## Before you start (owner)
 
-- [ ] A recent, restore-tested backup of the live database exists (the usual nightly one is enough).
+- [ ] **Backup gate passed** (`19-live-backup-verification.md`): `tools/prod-check/backup/0-live-backup-status.sql` was run
+      on the live server and showed a full backup of McLabor younger than 24 hours, present and verified (checksums
+      plus RESTORE VERIFYONLY, or a restore test); otherwise script 4 (COPY_ONLY full backup with checksum) was run
+      and verified first. The read-only login is not created before this box is ticked.
 - [ ] You have the two files from the repository folder `tools/prod-check/`: `proposed-grants-production.sql` and
       `verify-readonly-login.sql`, and `prodcheck.env.production.example` for step 5.
 - [ ] You know the live server's name as SQL Server reports it: in Management Studio run
