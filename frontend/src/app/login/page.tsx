@@ -192,7 +192,7 @@ function PasscodeForm() {
           {pairingStatus === "pending" && <div className="mt-1 text-xs">Give this code to an administrator. The page checks automatically; once approved, enter the password again.</div>}
         </div>
         <div>
-          <label className="label" htmlFor="site-password-2">Access password</label>
+          <label className="label" htmlFor="site-password-2">Access Password</label>
           <input id="site-password-2" type="password" className="input h-11 text-base" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
         </div>
         {showBootstrap ? (
@@ -212,7 +212,7 @@ function PasscodeForm() {
   return (
     <form onSubmit={submit} className="space-y-4" aria-label="Access password">
       <div>
-        <label className="label" htmlFor="site-password">Access password</label>
+        <label className="label" htmlFor="site-password">Access Password</label>
         <input id="site-password" type="password" className="input h-11 text-base" value={password} onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password" autoFocus required />
       </div>

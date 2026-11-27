@@ -87,6 +87,28 @@ Settings: `SITE_DEVICE_APPROVAL=true`, `WEBAUTHN_RP_ID=<host>`, `WEBAUTHN_ORIGIN
 
 **Decision taken (owner, 2026-11-26)**: option A, built and tested on staging; Cloudflare postponed.
 
+**Decision revised (owner, 2026-11-27): PASSWORD ONLY.** The owner does not want a device enrolment system. The
+approved-device layer is switched OFF (`SITE_DEVICE_APPROVAL=false`, the default); its code stays in the repository,
+dormant, and can be switched on later without a rebuild. The entrance is: open the website, enter the access password,
+search. Any computer, browser or phone with the correct password is in. What remains in force: HTTPS only, PBKDF2
+hash of the password in a sealed variable (never the password), generic error messages, per-address lockout with the
+site-wide pressure rule, 8-hour sessions, the unlock log (address, browser, outcome of every attempt), search-only
+(every write refused with 423), the read-only SQL account on the office side.
+
+**Remaining risks the owner accepts with a single shared password (to be confirmed before any real record is loaded)**
+1. One secret for everyone: a leaked or guessed password opens every approved column of every record to whoever has it,
+   from anywhere, until it is rotated. Mitigation: a long random production password handed out in person, rotated when
+   an employee leaves or on any suspicion (one variable change, sessions end at once).
+2. No individual identity: the audit log records address, browser and time, never a person. Mitigation: office PCs on
+   a fixed office address make the log usable; `SITE_DEFAULT_USER` is the staff record everybody acts as.
+3. The password screen is reachable from the whole internet: the lockout limits guessing (5 tries per address per 15
+   minutes, doubling; 50 site-wide failures slow unknown addresses) but a patient attacker can keep trying slowly.
+   Mitigation: 20 random characters make guessing hopeless; Cloudflare's rate-limit rule can be added later.
+4. Phishing: a copied page could collect the password. Mitigation: the exact address is bookmarked on office PCs;
+   no e-mail ever contains the link and the password together.
+5. Sessions: a signed-in browser left open stays in for up to 8 hours. Mitigation: lock the PC; shorten
+   `SITE_SESSION_MINUTES` if wanted.
+
 **Enrolling a real device (owner's PC first).** Open the site in Edge or Chrome, enter the site password, click
 "Register this device": Windows Hello asks for the PC's PIN (or fingerprint / face); the screen then shows a 6-letter
 pairing code and waits. An administrator approves the code (Users page, "Approved devices"), or the operator approves it
