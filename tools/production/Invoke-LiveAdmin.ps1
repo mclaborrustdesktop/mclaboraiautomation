@@ -27,6 +27,7 @@ param(
     [Parameter(Mandatory = $true)][ValidateSet('backup-status', 'verify-login', 'verifyonly', 'copy-only-backup', 'readonly-login')][string[]]$Scripts,
     [ValidateSet('', 'copy-only-backup', 'readonly-login')][string]$Approve = '',
     [switch]$Stored,
+    [switch]$TrustServerCertificate,   # office LAN session before the server has a trusted certificate (same trust level as Access today)
     [string]$Server = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -82,6 +83,7 @@ try {
         Write-Output "=== $s ==="
         $args = @('-I', $runner, '--server', $Server, '--expect', $expected, '--mode', $s)
         if ($s -eq $Approve) { $args += @('--approve', $Approve) }
+        if ($TrustServerCertificate) { $args += '--trust-server-certificate' }
         $json | & $python @args
         if ($LASTEXITCODE -ne 0) { $worst = $LASTEXITCODE; Write-Output "($s ended with code $LASTEXITCODE; later scripts are skipped)"; break }
     }
