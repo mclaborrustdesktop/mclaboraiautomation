@@ -73,8 +73,11 @@ def script_hash(path: Path) -> str:
     return hashlib.sha256(path.read_text(encoding="utf-8-sig").replace("\r\n", "\n").encode("utf-8")).hexdigest()
 
 
+TRUST_CERT = False  # set by --trust-server-certificate; default: the server certificate MUST verify against this PC's trusted roots
+
+
 def connect(server: str, cred: dict | None, database: str = "master") -> pyodbc.Connection:
-    base = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};Encrypt=yes;TrustServerCertificate=yes;APP=mclabor-live-admin"
+    base = f"DRIVER={{ODBC Driver 17 for SQL Server}};SERVER={server};DATABASE={database};Encrypt=yes;TrustServerCertificate={'yes' if TRUST_CERT else 'no'};APP=mclabor-live-admin"
     cs = base + ";Trusted_Connection=yes" if cred is None else base + f";UID={cred['login']};PWD={cred['password']}"
     return pyodbc.connect(cs, timeout=15, autocommit=True)
 
@@ -134,7 +137,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--approve", default="", help="must equal --mode for a changing script")
     ap.add_argument("--trusted", action="store_true", help="Windows authentication (local validation on the office copy only)")
     ap.add_argument("--show-hashes", action="store_true")
+    ap.add_argument("--trust-server-certificate", action="store_true", help="skip certificate verification (NOT for the live server until its certificate is trusted here)")
     a = ap.parse_args(argv[1:])
+    global TRUST_CERT
+    TRUST_CERT = a.trust_server_certificate
     if a.show_hashes:
         for mode, path in SCRIPTS.items():
             print(f'    "{mode}": "{script_hash(path)}",')

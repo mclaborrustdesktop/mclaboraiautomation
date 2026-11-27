@@ -30,6 +30,27 @@ backup state.** The copy on DEV-PC is not a backup of production: it is a snapsh
 **Is the 11-13 backup recent enough to protect the company's current records? No.** Two weeks of office work are
 not in it, and whether the live server has taken newer backups cannot be seen from here.
 
+## C0. Server identity: why the first session runs ON the server (2026-11-27)
+
+From the office PC, a SQL connection to the live server is encrypted but the server's certificate cannot be verified:
+the instance has no certificate the office PC trusts (it uses a self-signed one that SQL Server regenerates at every
+start). Pinning it is impossible without first connecting; installing a proper certificate changes the server
+configuration and restarts SQL Server for about a minute (`tools/prod-check/proposed-certificate-setup-live-host.ps1`,
+prepared, needs approval; it is required later anyway for the sync agent, which verifies the certificate).
+
+Therefore the **first production session runs on the live server itself**, over Remote Desktop, with Windows
+authentication on the local instance (shared memory, no network TLS): `tools/prod-check/backup/Run-LiveBackupChecks-OnServer.ps1`.
+No password is typed into anything of this project, nothing is stored, and the identity of the server is certain
+because the script runs on it (it refuses to run if the instance is not on the same computer). It performs only the
+backup-status report and `RESTORE VERIFYONLY` of the newest full backup, writes `live-backup-report-<date>.md` next to
+itself and copies the report to the clipboard. WinRM (port 5985) is open on the server too, but in a workgroup it
+offers no server authentication either and needs a client setting on the office PC, so it is not used.
+
+Order of preference for the later sessions (read-only login, its verification):
+1. the same Remote Desktop session with Management Studio or `sqlcmd` on the server (identity certain, nothing stored);
+2. after the certificate is installed and trusted on the office PC (approval + 1-minute restart): `Invoke-LiveAdmin.ps1`
+   from the office PC with certificate verification on (`TrustServerCertificate=no`), prompted credential, nothing stored.
+
 ## C. What the administrator runs (read-only, 2 minutes)
 
 Exact steps for the authorized SQL Server administrator, on the live server or any PC with Management Studio that

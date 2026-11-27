@@ -1,4 +1,7 @@
 # Runs reviewed scripts against the LIVE SQL Server as its administrator, one PowerShell session at a time.
+# TLS: the runner VERIFIES the server certificate by default (TrustServerCertificate=no). Until the live server has a certificate
+# trusted by this PC (toolsprod-checkproposed-certificate-setup-live-host.ps1, approval + 1-minute restart), use the on-server
+# script toolsprod-checkbackupRun-LiveBackupChecks-OnServer.ps1 over Remote Desktop instead of this one.
 #
 # AUTHENTICATION (default: nothing stored). The administrator login and password are typed at hidden prompts in THIS
 # window, kept only in this process, handed to the Python runner through its standard input (not an argument, not an
