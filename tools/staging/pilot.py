@@ -160,6 +160,8 @@ def main() -> int:
         return finish()
     now = dt.datetime.now(dt.timezone.utc)
     token = jwt.encode({"sub": str(admin_id), "env": "staging", "iat": now, "exp": now + dt.timedelta(minutes=20)}, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    if settings.access == "passcode":  # password-only site: the backend accepts only its own site-mode token (security.create_site_token)
+        token = jwt.encode({"sub": str(admin_id), "mode": "site", "who": "pilot-test", "env": settings.environment, "iat": now, "exp": now + dt.timedelta(minutes=20)}, settings.jwt_secret, algorithm=settings.jwt_algorithm)
     web = httpx.Client(base_url=BASE, timeout=40, headers={"Authorization": f"Bearer {token}"})
 
     status, sysinfo, _ = call(web, "system status", "GET", "/api/system/status")

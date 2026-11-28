@@ -83,6 +83,7 @@ class State:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(str(self.path), isolation_level=None)
         self.db.execute("PRAGMA journal_mode=WAL")
+        self.db.execute("PRAGMA synchronous=NORMAL")  # WAL stays consistent after a crash; a full fsync per statement is not needed
         self.db.execute("CREATE TABLE IF NOT EXISTS rows (table_name TEXT NOT NULL, pk INTEGER NOT NULL, hash TEXT NOT NULL, PRIMARY KEY (table_name, pk))")
         self.db.execute("CREATE TABLE IF NOT EXISTS runs (id INTEGER PRIMARY KEY AUTOINCREMENT, started_at TEXT, finished_at TEXT, status TEXT, mode TEXT, "
                         "upserted INTEGER DEFAULT 0, deleted INTEGER DEFAULT 0, error TEXT, cloud_run_id INTEGER)")
@@ -91,11 +92,16 @@ class State:
         return {int(pk): h for pk, h in self.db.execute("SELECT pk, hash FROM rows WHERE table_name = ?", (table,))}
 
     def remember(self, table: str, pairs: list[tuple[int, str]]) -> None:
-        self.db.executemany("INSERT INTO rows (table_name, pk, hash) VALUES (?, ?, ?) ON CONFLICT(table_name, pk) DO UPDATE SET hash = excluded.hash",
-                            [(table, pk, h) for pk, h in pairs])
+        # One transaction per batch: in autocommit mode SQLite commits (and syncs) every row, which took 10 s per 1,000 rows.
+        with self.db:
+            self.db.execute("BEGIN")
+            self.db.executemany("INSERT INTO rows (table_name, pk, hash) VALUES (?, ?, ?) ON CONFLICT(table_name, pk) DO UPDATE SET hash = excluded.hash",
+                                [(table, pk, h) for pk, h in pairs])
 
     def forget(self, table: str, pks: list[int]) -> None:
-        self.db.executemany("DELETE FROM rows WHERE table_name = ? AND pk = ?", [(table, pk) for pk in pks])
+        with self.db:
+            self.db.execute("BEGIN")
+            self.db.executemany("DELETE FROM rows WHERE table_name = ? AND pk = ?", [(table, pk) for pk in pks])
 
     def clear(self) -> None:
         self.db.execute("DELETE FROM rows")
