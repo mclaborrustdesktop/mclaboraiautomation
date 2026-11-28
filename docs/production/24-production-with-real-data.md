@@ -69,3 +69,9 @@ Dry run of the snapshot-phase settings on 2026-11-28 (reads everything, sends no
 | Signatures | the risk acknowledgment and the schedule approval. |
 
 Not blockers: code, configuration, tests, security checks, performance (`23`); all completed and kept.
+
+## 6. Dry run of the snapshot-phase settings (2026-11-28 00:34, nothing sent)
+
+`run-sync.ps1 -EnvFile ...\sync.snapshot.env -DryRun`: source `DEV-PC\SQLEXPRESS/McLabor` through the read-only login,
+33 tables, 1,209,951 rows read in 1,235 batches in 36 s, 0 warnings, 0 rows sent. The same settings without `-DryRun`
+perform step 3 of section 4 once the transfer is authorized.
