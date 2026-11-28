@@ -17,6 +17,10 @@ or passed anywhere. Access was not started; the newest file was opened read-only
 
 ## Result: CLIENT APPROVAL REQUIRED (no server administration, no Remote Desktop, no password in chat)
 
+> **Superseded on 2026-11-27 (evening):** the owner declined both the shared `mclabor` login and the TLS waiver.
+> The path now is the client-performed one-time setup of `21-client-one-time-setup.md` (dedicated read-only login,
+> verified certificate). The text below is kept as the record of the alternative that was considered.
+
 The shortest path that reuses everything already built:
 
 1. **The holder of the `mclabor` password** (the client; it is the Access application's login) types it once at the hidden

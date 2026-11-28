@@ -33,7 +33,7 @@ function Query($sql, $timeout = 60) {
 }
 function MdTable($table, $limit = 20) {
     $cols = @($table.Columns | ForEach-Object { $_.ColumnName })
-    $out = @('| ' + ($cols -join ' | ') + ' |', '|' + ('---|' * $cols.Count))
+    $out = @(); $out += ('| ' + ($cols -join ' | ') + ' |'); $out += ('|' + ('---|' * $cols.Count))
     $rows = @($table.Rows)
     foreach ($r in $rows | Select-Object -First $limit) { $out += '| ' + (($cols | ForEach-Object { ("$($r[$_])" -replace '\|', '/').Substring(0, [Math]::Min(60, "$($r[$_])".Length)) }) -join ' | ') + ' |' }
     if ($rows.Count -gt $limit) { $out += "| ... $($rows.Count - $limit) more row(s) |" + (' |' * ($cols.Count - 1)) }
