@@ -24,7 +24,7 @@ if (-not $env:SYNC_API) { throw 'sync.env must set SYNC_API=https://<the website
 $E = $environment.ToUpper()
 $dir = Join-Path $env:LOCALAPPDATA 'MCLabor'
 $dbFile = Join-Path $dir "$environment-mclabor_web_read.dpapi"
-$syncFile = Join-Path $dir "sync-$environment.dpapi"
+$syncFile = Join-Path $dir $(if ($env:SYNC_SECRETS_FILE) { $env:SYNC_SECRETS_FILE } else { "sync-$environment.dpapi" })   # SYNC_SECRETS_FILE: e.g. the production key while the source is still the local snapshot
 foreach ($f in $dbFile, $syncFile) { if (-not (Test-Path $f)) { throw "Secret file missing: $f (run store-sync-secrets.ps1 as this Windows account)." } }
 
 $env:MCLABOR_ENV_FILE = 'none'

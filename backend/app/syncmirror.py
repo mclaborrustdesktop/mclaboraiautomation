@@ -201,7 +201,10 @@ def start_run(mode: str, source: str | None, agent: str | None, allow_mass_delet
     with _session() as s:
         prior = s.execute(select(SyncRun.source).where(SyncRun.environment == settings.environment, SyncRun.status == "success", SyncRun.source.is_not(None))
                           .order_by(SyncRun.id.desc()).limit(1)).scalar()
-        if prior and announced and prior.strip().lower() != announced.lower():
+        if prior and announced and prior.strip().lower() != announced.lower() and announced.lower() != expected.lower():
+            # The one allowed change: the owner re-points SYNC_EXPECTED_SOURCE (e.g. from the office PC's snapshot to the live
+            # server, the same database continued). The agent keeps its state file, so changed rows are updated and rows gone
+            # since the snapshot are deleted; two unrelated systems are still never mixed.
             raise ValueError(f"this mirror holds data from '{prior}'; a run from '{announced}' is refused so that two systems are never mixed")
         # a run that never finished (agent crashed, link dropped) is marked abandoned when the next one starts
         for old in s.execute(select(SyncRun).where(SyncRun.environment == settings.environment, SyncRun.status == "running")).scalars():

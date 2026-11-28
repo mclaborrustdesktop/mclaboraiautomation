@@ -86,11 +86,15 @@ def main(argv: list[str]) -> int:
     if sync_path is not None:
         print(f"3. {sync_path.name}: the office agent's settings")
         sv = parse(sync_path)
-        check(sv.get("DATA_SOURCE") == "production", "agent reads the live environment")
-        check(sv.get("PRODUCTION_DB_USER") == "mclabor_web_read", "agent uses the read-only login, never an administrator")
-        check(sv.get("PRODUCTION_WRITES_ENABLED", "").lower() == "false", "writes disabled for the agent")
-        check(sv.get("PRODUCTION_DB_ENCRYPT", "").lower() == "true" and sv.get("PRODUCTION_DB_TRUST_SERVER_CERTIFICATE", "").lower() == "false", "TLS to the server with certificate verification")
-        check(f"{sv.get('PRODUCTION_DB_EXPECTED_SERVER_NAME')}/{sv.get('PRODUCTION_DB_NAME')}" == src, "agent's announced source equals the website's SYNC_EXPECTED_SOURCE")
+        ds = sv.get("DATA_SOURCE", "")
+        check(ds in ("production", "staging"), "agent reads the live server (production) or the office PC's snapshot copy (staging)", ds)
+        E = ds.upper()
+        check(sv.get(f"{E}_DB_USER") == "mclabor_web_read", "agent uses the read-only login, never an administrator")
+        check(sv.get(f"{E}_WRITES_ENABLED", "").lower() == "false", "writes disabled for the agent")
+        check(sv.get(f"{E}_DB_ENCRYPT", "").lower() == "true" and sv.get(f"{E}_DB_TRUST_SERVER_CERTIFICATE", "").lower() == "false", "TLS to the server with certificate verification")
+        check(f"{sv.get(f'{E}_DB_EXPECTED_SERVER_NAME')}/{sv.get(f'{E}_DB_NAME')}" == src, "agent's announced source equals the website's SYNC_EXPECTED_SOURCE")
+        if ds == "staging":
+            check(sv.get("SYNC_SECRETS_FILE") == "sync-production.dpapi", "snapshot phase sends with the PRODUCTION sync key")
         check(sv.get("SYNC_API", "").startswith("https://"), "agent sends to an https address", sv.get("SYNC_API", ""))
     print(f"\nRESULT: {'ALL PASSED' if not fails else str(fails) + ' FAILED'}")
     return 1 if fails else 0
