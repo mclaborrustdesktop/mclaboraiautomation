@@ -23,7 +23,7 @@ import sys
 from datetime import datetime, timedelta
 
 from sqlalchemy import Boolean, DateTime, Integer, String, select
-from sqlalchemy.exc import IntegrityError, ProgrammingError
+from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
 from .config import settings
@@ -150,9 +150,9 @@ def _session() -> Session:
         _engine = make_engine(settings.web_auth_url)
         try:
             AuthBase.metadata.create_all(_engine)
-        except (IntegrityError, ProgrammingError):
+        except (IntegrityError, ProgrammingError, OperationalError):
             # Several worker processes start at once on a fresh database and all try to create the tables; the first one
-            # wins and the others see "already exists". Fine as long as the tables are there now.
+            # wins and the others see "already exists" (SQLite reports it as OperationalError). Fine as long as the tables are there now.
             from sqlalchemy import inspect
 
             if not all(inspect(_engine).has_table(t) for t in AuthBase.metadata.tables):

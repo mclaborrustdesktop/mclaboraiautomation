@@ -54,7 +54,7 @@ def test_staging_is_read_only_over_the_api(tmp_path):
     ({"PRODUCTION_DB_SERVER": "copy-host.invalid"}, "must be different"),
     ({"PRODUCTION_DB_EXPECTED_SERVER_NAME": "copy-host\\sqlexpress"}, "must be different"),
     ({"STAGING_DB_EXPECTED_SERVER_NAME": "LIVE-HOST\\SQLEXPRESS", "PRODUCTION_DB_SERVER": "live-host\\sqlexpress"}, "wrong environment"),
-    ({"STAGING_DB_TRUST_SERVER_CERTIFICATE": "true"}, "TRUST_SERVER_CERTIFICATE must stay false"),
+    ({"STAGING_DB_TRUST_SERVER_CERTIFICATE": "true"}, "needs STAGING_DB_TLS_WAIVER"),  # accepted only with the owner's written waiver
     ({"JWT_SECRET": "change-me-in-production-mc-labor-demo-secret"}, "JWT_SECRET"),
     ({"DATA_SOURCE": "prod"}, "DATA_SOURCE must be one of"),
 ])
